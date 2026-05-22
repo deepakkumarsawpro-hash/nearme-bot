@@ -6,8 +6,8 @@ app = Flask(__name__)
 
 # Aapke credentials
 VERIFY_TOKEN = "my_secret_token_123" 
-PHONE_NUMBER_ID = "1190419820813262"
-ACCESS_TOKEN = "EAAMEDcGznz0BRpQd1elkurZAqtkH7ksFYX4fOJr3SJZAbxZAgWANWdG03eydQYkl5v53KGnuHxbrwVnqcvyrWNMYHuyJZAsaBJ1JZCNRoHxl0A00BJamqHU4yQszp6x4TBIyRRsQUCtIxL1604mSufsQo1rdHszltEOiBRyv7GVj0KXfs82YYrfwYvifXOAfwJQZDZD"
+PHONE_NUMBER_ID = "1060745180462931"
+ACCESS_TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHhfnbqaWVfcvZA8VqXfY4vm2SmZBBhuU7PpUHbZCCJRTpugaLqdPcbs4moBPtpqxtaOmYtOZCZBPdd1TYIeNLLczx9svvHOazqCy5ah3UHCiGrC169ZBNlk61JOsWO1XVtsgZDZD"
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -35,6 +35,7 @@ def webhook():
         return "OK", 200
 
 def send_reply(to, message_text):
+    # WhatsApp API URL
     url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
@@ -45,8 +46,9 @@ def send_reply(to, message_text):
         "to": to,
         "text": {"body": message_text}
     }
+    # Request bhejna
     response = requests.post(url, json=payload, headers=headers)
-    print(f"Reply Status: {response.status_code}") # Log mein check karne ke liye
+    print(f"Reply Status: {response.status_code}")
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
