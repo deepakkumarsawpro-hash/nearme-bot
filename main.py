@@ -4,7 +4,8 @@ import os
 app = Flask(__name__)
 
 # यहाँ वही टोकन डालें जो Meta पोर्टल में है
-VERIFY_TOKEN = "NearMe123"
+VERIFY_TOKEN = "my_secret_token_123"
+
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
