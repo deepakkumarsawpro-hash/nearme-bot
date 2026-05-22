@@ -23,36 +23,22 @@ def send_menu(to, title, body, rows):
 def webhook():
     if request.method == 'GET':
         return request.args.get("hub.challenge")
-    
     data = request.get_json()
-    # Log the incoming data to debug if needed
-    print(data) 
-    
     try:
-        # Check if it's a message
-        if 'messages' in data['entry'][0]['changes'][0]['value']:
-            msg = data['entry'][0]['changes'][0]['value']['messages'][0]
-            sender = msg['from']
-            
-            # Handle Interactive Menu Selection
-            if 'interactive' in msg:
-                sel_id = msg['interactive']['list_reply']['id']
-                if sel_id == "buyer":
-                    # Yahan location request ki jagah categories dikha rahe hain
-                    send_menu(sender, "Categories", "Select service:", [{"id": "kirana", "title": "Kirana"}, {"id": "hotel", "title": "Hotel"}])
-                elif sel_id == "kirana":
-                     # Yahan sub-category dikhayenge
-                     send_menu(sender, "Sub-Category", "Select item:", [{"id": "sabji", "title": "Sabji"}, {"id": "milk", "title": "Milk"}])
-            
-            # Handle First Message / Text
-            else:
-                send_menu(sender, "Welcome", "नमस्कार! NearMe में स्वागत है।", [{"id": "buyer", "title": "Buyer"}, {"id": "seller", "title": "Seller"}])
-                
-    except Exception as e:
-        print(f"Error: {e}")
-        
+        msg = data['entry'][0]['changes'][0]['value']['messages'][0]
+        sender = msg['from']
+        if 'interactive' in msg:
+            sel_id = msg['interactive']['list_reply']['id']
+            if sel_id == "buyer":
+                send_menu(sender, "Categories", "Select service:", [{"id": "kirana", "title": "Kirana"}, {"id": "hotel", "title": "Hotel"}])
+            elif sel_id == "kirana":
+                send_menu(sender, "Sub-Cat", "Select item:", [{"id": "sabji", "title": "Sabji"}, {"id": "milk", "title": "Milk"}])
+        else:
+            send_menu(sender, "Welcome", "नमस्कार! NearMe में स्वागत है।", [{"id": "buyer", "title": "Buyer"}, {"id": "seller", "title": "Seller"}])
+    except: pass
     return "OK", 200
 
 if __name__ == '__main__':
-    app.run(port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
     
