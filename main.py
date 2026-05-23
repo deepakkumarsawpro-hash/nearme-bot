@@ -1,18 +1,67 @@
- elif "sale_service" in text:
-        # Ab button click hone par location ka message aur button bhejein
+from flask import Flask, request
+import requests
+
+app = Flask(__name__)
+
+# Aapki details
+VERIFY_TOKEN = "my_secret_token_123"
+PHONE_NUMBER_ID = "1060745180462931"
+ACCESS_TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHhfnbqaWVfcvZA8VqXfY4vm2SmZBBhuU7PpUHbZCCJRTpugaLqdPcbs4moBPtpqxtaOmYtOZCZBPdd1TYIeNLLczx9svvHOazqCy5ah3UHCiGrC169ZBNlk61JOsWO1XVtsgZDZD"
+
+@app.route('/webhook', methods=['GET', 'POST'])
+def webhook():
+    if request.method == 'GET':
+        if request.args.get("hub.verify_token") == VERIFY_TOKEN:
+            return request.args.get("hub.challenge")
+        return "Failed", 403
+
+    data = request.get_json()
+    if 'entry' in data:
+        for entry in data['entry']:
+            for change in entry.get('changes', []):
+                value = change.get('value', {})
+                if 'messages' in value:
+                    for message in value['messages']:
+                        sender = message['from']
+                        text = ""
+                        if 'text' in message:
+                            text = message['text']['body'].lower()
+                        elif 'interactive' in message:
+                            text = message['interactive']['button_reply']['id'].lower()
+                        
+                        send_response(sender, text)
+    return "OK", 200
+
+def send_response(to, text):
+    url = f"https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages"
+    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
+    
+    payload = None
+
+    if "hi" in text or "hello" in text:
         payload = {
-            "messaging_product": "whatsapp",
-            "to": to,
-            "type": "interactive",
+            "messaging_product": "whatsapp", "to": to, "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": "Namaste! NearMe mein swagat hai. Aap kya hain?"},
+                "action": {"buttons": [{"type": "reply", "reply": {"id": "sale_service", "title": "सेल & सर्विस"}}, {"type": "reply", "reply": {"id": "customer", "title": "ग्राहक"}}]}
+            }
+        }
+    elif "sale_service" in text:
+        payload = {
+            "messaging_product": "whatsapp", "to": to, "type": "interactive",
             "interactive": {
                 "type": "button",
                 "body": {"text": "Great! Ab aap apna location share karein (Attach > Location)."},
-                "action": {
-                    "buttons": [
-                        {"type": "reply", "reply": {"id": "share_loc_now", "title": "Location bhejein"}}
-                    ]
-                }
+                "action": {"buttons": [{"type": "reply", "reply": {"id": "share_loc_now", "title": "Location bhejein"}}]}
             }
         }
     elif "share_loc_now" in text:
-        payload = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Theek hai, ab aap neeche diye gaye Pin icon par click karke apni location share karein."}}
+        payload = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Theek hai, ab aap neeche diye gaye Pin icon (Attach) par click karke apni location share karein."}}
+
+    # Sirf tabhi request bhejein agar payload ban gaya ho
+    if payload:
+        requests.post(url, json=payload, headers=headers)
+
+if __name__ == '__main__':
+    app.run(port=5000)
