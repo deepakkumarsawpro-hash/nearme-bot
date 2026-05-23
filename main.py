@@ -1,14 +1,13 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import requests
 
 app = Flask(__name__)
 
-# Config
+# Details
 PHONE_ID = "1060745180462931"
 TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHhfnbqaWVfcvZA8VqXfY4vm2SmZBBhuU7PpUHbZCCJRTpugaLqdPcbs4moBPtpqxtaOmYtOZCZBPdd1TYIeNLLczx9svvHOazqCy5ah3UHCiGrC169ZBNlk61JOsWO1XVtsgZDZD"
 
-# Backend Data Storage
 user_data = {}
 
 def send_msg(to, payload):
@@ -26,38 +25,34 @@ def webhook():
         msg = data['entry'][0]['changes'][0]['value'].get('messages', [{}])[0]
         sender = msg.get('from')
         
-        # Logic Flow
-        if 'text' in msg or 'interactive' in msg:
-            text = msg['text']['body'].lower() if 'text' in msg else msg['interactive'].get('button_reply', {}).get('id', '')
-            
-            # 1. Welcome
-            if text in ['hi', 'hello']:
-                user_data[sender] = {'step': 1}
-                send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "interactive", "interactive": {
-                    "type": "button", "body": {"text": "Namaste! NearMe mein swagat hai. Aap kya hain?"},
-                    "action": {"buttons": [{"type": "reply", "reply": {"id": "sale_service", "title": "सेल & सर्विस"}}, {"type": "reply", "reply": {"id": "customer", "title": "ग्राहक"}}]}}})
-            
-            # 2. Form Start
-            elif text == "sale_service":
-                user_data[sender]['step'] = 2
-                send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {"body": "NearMe Form:\n1. Location: कृपया अपना लोकेशन पिन भेजें।"}})
-            
-            # 3. Handle Number
-            elif sender in user_data and user_data[sender].get('step') == 3 and text.isdigit():
-                user_data[sender]['phone'] = text
-                send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {"body": f"Dhanyavad! Aapka data save ho gaya hai. Hum {text} par sampark karenge."}})
-                # Yahan aap apna logic daal sakte hain jo backend se match karega.
-                print(f"SAVED DATA: {user_data[sender]}")
-
-        # Handle Location
+        # 1. Welcome Message
+        if 'text' in msg and msg['text']['body'].lower() in ['hi', 'hello']:
+            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "interactive", "interactive": {
+                "type": "button", "body": {"text": "NearMe mein swagat hai!"},
+                "action": {"buttons": [{"type": "reply", "reply": {"id": "sale_service", "title": "सेल & सर्विस"}}]}}})
+        
+        # 2. Location Request
+        elif 'interactive' in msg and msg['interactive'].get('button_reply', {}).get('id') == "sale_service":
+            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {"body": "Apna location pin bhejein:"}})
+        
+        # 3. Location Receive -> Category List
         elif 'location' in msg:
-            if sender in user_data:
-                user_data[sender]['loc'] = msg['location']
-                user_data[sender]['step'] = 3
-                send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {"body": "Location mil gayi! \n\nAb apna WhatsApp Number type karein:"}})
-    
+            user_data[sender] = {'loc': msg['location']}
+            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "interactive", "interactive": {
+                "type": "list", "header": {"type": "text", "text": "Categories"}, "body": {"text": "Category chunein:"},
+                "action": {"button": "Categories", "sections": [{"title": "Select", "rows": [
+                    {"id": "cat_1", "title": "1. Construction"}, {"id": "cat_2", "title": "2. Automotive"},
+                    {"id": "cat_3", "title": "3. Food"}, {"id": "cat_4", "title": "4. Retail"},
+                    {"id": "cat_5", "title": "5. Healthcare"}, {"id": "cat_6", "title": "6. Personal"},
+                    {"id": "cat_7", "title": "7. Agriculture"}]}]}}})
+        
+        # 4. Handle Number Input
+        elif 'text' in msg and msg['text']['body'].isdigit() and len(msg['text']['body']) >= 10:
+            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {"body": "Dhanyavad! Data save ho gaya."}})
+
     return "OK", 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
     
