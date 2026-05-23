@@ -1,5 +1,6 @@
 from flask import Flask, request
 import requests
+import os
 
 app = Flask(__name__)
 
@@ -16,14 +17,15 @@ def webhook():
         return "Failed", 403
 
     data = request.get_json()
-    if 'entry' in data:
+    if data and 'entry' in data:
         for entry in data['entry']:
             for change in entry.get('changes', []):
                 value = change.get('value', {})
                 if 'messages' in value:
                     for message in value['messages']:
                         sender = message['from']
-                        text = ""
+                        text = "hi" # Default
+                        
                         if 'text' in message:
                             text = message['text']['body'].lower()
                         elif 'interactive' in message:
@@ -36,7 +38,8 @@ def send_response(to, text):
     url = f"https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
     
-    payload = None
+    # Payload hamesha define hona chahiye
+    payload = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Processing..."}}
 
     if "hi" in text or "hello" in text:
         payload = {
@@ -52,16 +55,14 @@ def send_response(to, text):
             "messaging_product": "whatsapp", "to": to, "type": "interactive",
             "interactive": {
                 "type": "button",
-                "body": {"text": "Great! Ab aap apna location share karein (Attach > Location)."},
+                "body": {"text": "Great! Ab aap apna location share karein."},
                 "action": {"buttons": [{"type": "reply", "reply": {"id": "share_loc_now", "title": "Location bhejein"}}]}
             }
         }
-    elif "share_loc_now" in text:
-        payload = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Theek hai, ab aap neeche diye gaye Pin icon (Attach) par click karke apni location share karein."}}
-
-    # Sirf tabhi request bhejein agar payload ban gaya ho
-    if payload:
-        requests.post(url, json=payload, headers=headers)
+    
+    requests.post(url, json=payload, headers=headers)
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    # Railway ke liye port set karna zaroori hai
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
