@@ -1,6 +1,4 @@
-# send_welcome_buttons function mein ye badlav karein:
-
-    elif "sale_service" in text:
+ elif "sale_service" in text:
         # Ab button click hone par location ka message aur button bhejein
         payload = {
             "messaging_product": "whatsapp",
