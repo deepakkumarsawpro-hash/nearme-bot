@@ -52,6 +52,7 @@ def send_response(to, text):
         requests.post(url, json=payload, headers=headers)
 
 if __name__ == '__main__':
-    # Railway ke liye important: PORT environment variable ka use karein
+    # Railway ke liye port dynamic hona chahiye
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
+
