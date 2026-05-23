@@ -23,23 +23,42 @@ def webhook():
                 if 'messages' in value:
                     for message in value['messages']:
                         sender = message['from']
+                        # Message text ya button click dono ko handle karega
                         text = message.get('text', {}).get('body', '').lower()
-                        send_whatsapp_message(sender, text)
+                        if 'interactive' in message:
+                            text = message['interactive']['button_reply']['id'].lower()
+                        
+                        send_welcome_buttons(sender, text)
     return "OK", 200
 
-def send_whatsapp_message(to, text):
-    # Logic: Categories handle karna
-    if "hi" in text or "hello" in text:
-        reply_body = "Welcome to NearMe! Choose category:\n1. Construction\n2. Automobile\n3. Food"
-    elif "construction" in text:
-        reply_body = "Construction services: [Link1], [Link2]"
-    else:
-        reply_body = "Please reply with 'Hi' to see categories."
-
+def send_welcome_buttons(to, text):
     url = f"https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
-    payload = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": reply_body}}
     
+    if "hi" in text or "hello" in text:
+        # Welcome message with 2 buttons
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": "Namaste! NearMe mein swagat hai. Aap kya hain?"},
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"id": "sale_service", "title": "सेल & सर्विस"}},
+                        {"type": "reply", "reply": {"id": "customer", "title": "ग्राहक"}}
+                    ]
+                }
+            }
+        }
+    elif "sale_service" in text:
+        payload = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Great! Aap Sale & Service category mein hain."}}
+    elif "customer" in text:
+        payload = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Welcome! Aap Customer category mein hain."}}
+    else:
+        return # Koi response nahi
+
     requests.post(url, json=payload, headers=headers)
 
 if __name__ == '__main__':
