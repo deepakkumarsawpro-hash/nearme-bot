@@ -4,7 +4,6 @@ import requests
 
 app = Flask(__name__)
 
-# Details
 PHONE_NUMBER_ID = "1060745180462931"
 ACCESS_TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHhfnbqaWVfcvZA8VqXfY4vm2SmZBBhuU7PpUHbZCCJRTpugaLqdPcbs4moBPtpqxtaOmYtOZCZBPdd1TYIeNLLczx9svvHOazqCy5ah3UHCiGrC169ZBNlk61JOsWO1XVtsgZDZD"
 VERIFY_TOKEN = "my_secret_token_123"
@@ -23,12 +22,13 @@ def webhook():
                 if 'messages' in value:
                     msg = value['messages'][0]
                     sender = msg['from']
-                    
-                    # Message type detect karke logic trigger karein
+                    text = ""
                     if 'text' in msg: text = msg['text']['body'].lower()
-                    elif 'interactive' in msg: text = msg['interactive']['button_reply']['id'].lower()
+                    elif 'interactive' in msg:
+                        # LIST aur BUTTON dono handle karne ke liye
+                        if 'button_reply' in msg['interactive']: text = msg['interactive']['button_reply']['id'].lower()
+                        elif 'list_reply' in msg['interactive']: text = msg['interactive']['list_reply']['id'].lower()
                     elif 'location' in msg: text = "step_location_received"
-                    else: text = ""
                     
                     process_step(sender, text)
     return "OK", 200
@@ -45,31 +45,32 @@ def process_step(to, text):
             "type": "button", "body": {"text": "Namaste! NearMe mein swagat hai. Aap kya hain?"},
             "action": {"buttons": [{"type": "reply", "reply": {"id": "sale_service", "title": "सेल & सर्विस"}}, {"type": "reply", "reply": {"id": "customer", "title": "ग्राहक"}}]}}})
 
-    # Step 1: Location Prompt
+    # Step 1: Location
     elif text == "sale_service":
         send_msg(to, {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Great! Pin icon par click karke apni location share karein."}})
 
     # Step 2: Main Categories (List)
     elif text == "step_location_received":
         send_msg(to, {"messaging_product": "whatsapp", "to": to, "type": "interactive", "interactive": {
-            "type": "list", "header": {"type": "text", "text": "Main Categories"}, "body": {"text": "Location mil gayi! Apni Category chunein:"},
-            "action": {"button": "Categories", "sections": [{"title": "Select", "rows": [
-                {"id": "cat_1", "title": "1. Construction & Home"}, {"id": "cat_2", "title": "2. Automotive"},
-                {"id": "cat_3", "title": "3. Food & Hospitality"}, {"id": "cat_4", "title": "4. Retail & Daily"},
-                {"id": "cat_5", "title": "5. Healthcare & Edu"}, {"id": "cat_6", "title": "6. Personal & Prof"},
-                {"id": "cat_7", "title": "7. Agriculture"}]}]}}})
+            "type": "list", "header": {"type": "text", "text": "Main Categories"}, "body": {"text": "Location mil gayi! Category chunein:"},
+            "action": {"button": "Categories", "sections": [{"title": "Select One", "rows": [
+                {"id": "cat_1", "title": "1. Construction"}, {"id": "cat_2", "title": "2. Automotive"},
+                {"id": "cat_3", "title": "3. Food"}, {"id": "cat_4", "title": "4. Retail"},
+                {"id": "cat_5", "title": "5. Healthcare"}, {"id": "cat_6", "title": "6. Personal"}, {"id": "cat_7", "title": "7. Agriculture"}]}]}}})
 
-    # Step 3: Sub-Category Selection (Example for Cat 1)
+    # Step 3: Sub-Categories (Buttons) - Example for Cat 1 (Construction)
     elif text == "cat_1":
         send_msg(to, {"messaging_product": "whatsapp", "to": to, "type": "interactive", "interactive": {
             "type": "button", "body": {"text": "Construction Sub-Category:"},
-            "action": {"buttons": [
-                {"type": "reply", "reply": {"id": "sub_mason", "title": "Mason"}},
-                {"type": "reply", "reply": {"id": "sub_plumber", "title": "Plumber"}}]}}})
+            "action": {"buttons": [{"type": "reply", "reply": {"id": "sub_mason", "title": "Mason"}}, {"type": "reply", "reply": {"id": "sub_plumber", "title": "Plumber"}}]}}})
 
     # Step 4: Keywords & Open Text
     elif text.startswith("sub_"):
-        send_msg(to, {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Keywords: Raj Mistri, Building, Cement. \n\nAb apna specific kaam type karke message bhejein:"}})
+        send_msg(to, {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Keywords: Raj Mistri, Building, Cement. \n\nAb apna specific kaam type karke bhejein:"}})
+
+    # Final Step: Handle Open Text
+    elif len(text) > 3 and not text.startswith(("cat_", "sub_", "step_")):
+        send_msg(to, {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": "Aapki request: '" + text + "' mil gayi hai. Hum aapko jald contact karenge!"}})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
