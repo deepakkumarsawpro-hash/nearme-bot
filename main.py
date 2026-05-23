@@ -52,7 +52,5 @@ def send_response(to, text):
         requests.post(url, json=payload, headers=headers)
 
 if __name__ == '__main__':
-    # Railway ke liye port dynamic hona chahiye
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
+    # Railway ke liye direct port 5000 set kar rahe hain taaki variable ki jhanjhat na rahe
+    app.run(host='0.0.0.0', port=5000)
