@@ -4,6 +4,7 @@ from flask import Flask, request
 import psycopg
 import redis
 import json
+import math
 
 app = Flask(__name__)
 
@@ -108,6 +109,17 @@ categories = {
 }
 
 # =====================================================
+# HELPER: CALCULATE DISTANCE
+# =====================================================
+def haversine_distance(lat1, lon1, lat2, lon2):
+    R = 6371 # Earth radius in KM
+    dLat = math.radians(lat2 - lat1)
+    dLon = math.radians(lon2 - lon1)
+    a = math.sin(dLat/2) * math.sin(dLat/2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon/2) * math.sin(dLon/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+# =====================================================
 # SEND FUNCTION
 # =====================================================
 
@@ -132,6 +144,22 @@ def send_text(to, text):
         "to": to,
         "type": "text",
         "text": {"body": text}
+    }
+    send(payload)
+
+# =====================================================
+# SEND IMAGE WITH CAPTION
+# =====================================================
+
+def send_image(to, image_id, caption):
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "image",
+        "image": {
+            "id": image_id,
+            "caption": caption
+        }
     }
     send(payload)
 
@@ -176,6 +204,64 @@ def send_category_list(to):
         }
     }
     send(payload)
+
+# =====================================================
+# AUTO MATCHING FUNCTION
+# =====================================================
+def find_and_notify_sellers(customer_data):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Customer ki details
+        cust_lat = customer_data["location"]["latitude"]
+        cust_lon = customer_data["location"]["longitude"]
+        cust_category = customer_data["category"]
+        cust_subcategory = customer_data["subcategory"]
+        max_distance = int(customer_data["distance"].split()[0]) # "5 KM" se 5 nikalo
+
+        # Requirement text
+        req_text = customer_data.get("requirement_text") or customer_data.get("requirement_caption", "No text")
+        cust_phone = customer_data.get("whatsapp", "Not provided")
+        req_image_id = customer_data.get("requirement_image")
+
+        # DB se matching sellers nikalo
+        cur.execute("""
+            SELECT phone, data FROM leads
+            WHERE data->>'role' = 'seller'
+            AND data->>'category' = %s
+            AND data->>'subcategory' = %s
+        """, (cust_category, cust_subcategory))
+
+        sellers = cur.fetchall()
+        matched_count = 0
+
+        for seller_phone, seller_data_json in sellers:
+            seller_data = seller_data_json
+            seller_lat = seller_data["location"]["latitude"]
+            seller_lon = seller_data["location"]["longitude"]
+
+            distance = haversine_distance(cust_lat, cust_lon, seller_lat, seller_lon)
+
+            if distance <= max_distance:
+                matched_count += 1
+                shop_name = seller_data.get("shop_name", "Seller")
+
+                # Seller ko message bhejo
+                msg = f"🔔 *New Customer Lead* 🔔\n\n👤 *Customer*: +{cust_phone}\n📍 *Distance*: {distance:.1f} KM away\n📂 *Category*: {categories[cust_category]['title']} > {cust_subcategory}\n📝 *Requirement*: {req_text}\n\nJaldi contact karein!"
+
+                if req_image_id:
+                    send_image(seller_phone, req_image_id, msg)
+                else:
+                    send_text(seller_phone, msg)
+
+        cur.close()
+        conn.close()
+        return matched_count
+
+    except Exception as e:
+        print(f"Matching Error: {e}")
+        return 0
 
 # =====================================================
 # DB CHECK ROUTE
@@ -239,7 +325,6 @@ def webhook():
 
         session = json.loads(session_data)
 
-        # Fix: Agar user start me hi text bhej de to button bhejo
         if "text" in msg and session["step"] == "role":
             buttons = [
                 {"type": "reply", "reply": {"id": "customer", "title": "Customer"}},
@@ -326,10 +411,18 @@ def webhook():
                     conn.commit()
                     cur.close()
                     conn.close()
+
+                    # AUTO MATCHING TRIGGER
+                    if session["role"] == "customer":
+                        matched = find_and_notify_sellers(session)
+                        send_text(sender, f"✅ धन्यवाद 🙏\n\nआपकी जानकारी सफलतापूर्वक दर्ज हो गई है।\n\n📢 {matched} नजदीकी दुकानदारों को आपकी requirement भेज दी गई है।\n\nहमारी टीम जल्द ही आपसे संपर्क करेगी.")
+                    else:
+                        send_text(sender, "✅ धन्यवाद 🙏\n\nआपकी दुकान सफलतापूर्वक रजिस्टर हो गई है।\n\nअब आपके area के Customer की requirement सीधे आपके WhatsApp पर आएगी.")
+
                 except Exception as db_error:
                     print(f"DB Save Error: {db_error}")
+                    send_text(sender, "⚠️ कुछ Error आ गया। कृपया फिर से try करें।")
 
-                send_text(sender, "✅ धन्यवाद 🙏\n\nआपकी जानकारी सफलतापूर्वक दर्ज हो गई है।\n\nहमारी टीम जल्द ही आपसे संपर्क करेगी.")
                 r.delete(f"session:{sender}")
                 return "OK", 200
 
