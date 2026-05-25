@@ -120,7 +120,10 @@ def send(payload):
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
     }
-    requests.post(url, json=payload, headers=headers)
+    try:
+        requests.post(url, json=payload, headers=headers)
+    except Exception as e:
+        print(f"Send Error: {e}")
 
 # =====================================================
 # SEND TEXT
@@ -217,42 +220,4 @@ def webhook():
     try:
         data = request.get_json()
         if "entry" not in data:
-            return "OK", 200
-
-        msg = data["entry"][0]["changes"][0]["value"].get("messages", [{}])[0]
-        sender = msg.get("from")
-        if not sender:
-            return "OK", 200
-
-        r = get_redis()
-        session_data = r.get(f"session:{sender}")
-
-        if not session_data:
-            session = {"step": "role"}
-            r.set(f"session:{sender}", json.dumps(session))
-            buttons = [
-                {"type": "reply", "reply": {"id": "customer", "title": "Customer"}},
-                {"type": "reply", "reply": {"id": "seller", "title": "Seller"}}
-            ]
-            send_buttons(sender, "🙏 Welcome to Near Me Marketplace\n\nकृपया अपना रोल चुनें:", buttons)
-            return "OK", 200
-
-        session = json.loads(session_data)
-
-        if "interactive" in msg:
-            interactive = msg["interactive"]
-            if interactive["type"] == "button_reply":
-                button_id = interactive["button_reply"]["id"]
-                if session["step"] == "role":
-                    session["role"] = button_id
-                    if button_id == "customer":
-                        session["step"] = "distance"
-                        buttons = [
-                            {"type": "reply", "reply": {"id": "1 KM", "title": "1 KM"}},
-                            {"type": "reply", "reply": {"id": "5 KM", "title": "5 KM"}},
-                            {"type": "reply", "reply": {"id": "10 KM", "title": "10 KM"}}
-                        ]
-                        send_buttons(sender, "📍 कितनी दूरी में सेवा चाहिए?", buttons)
-                    else:
-                        session["step"] = "shop_name"
-                        send
+            return
