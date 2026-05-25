@@ -19,6 +19,35 @@ def get_redis():
     return redis.from_url(os.getenv('REDIS_URL'))
 
 # =====================================================
+# HELPER: FORMAT PHONE NUMBER
+# =====================================================
+def format_phone(phone):
+    # Remove spaces, +, -
+    phone = str(phone).replace(" ", "").replace("+", "").replace("-", "")
+
+    # Agar 10 digit hai to 91 add karo
+    if len(phone) == 10 and phone.isdigit():
+        return "91" + phone
+
+    # Agar already 91 se start hai to waise hi return karo
+    if len(phone) == 12 and phone.startswith("91"):
+        return phone
+
+    # Warna jo hai wahi bhej do
+    return phone
+
+# =====================================================
+# HELPER: CALCULATE DISTANCE
+# =====================================================
+def haversine_distance(lat1, lon1, lat2, lon2):
+    R = 6371 # Earth radius in KM
+    dLat = math.radians(lat2 - lat1)
+    dLon = math.radians(lon2 - lon1)
+    a = math.sin(dLat/2) * math.sin(dLat/2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon/2) * math.sin(dLon/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+# =====================================================
 # WHATSAPP CONFIG
 # =====================================================
 
@@ -107,17 +136,6 @@ categories = {
         }
     }
 }
-
-# =====================================================
-# HELPER: CALCULATE DISTANCE
-# =====================================================
-def haversine_distance(lat1, lon1, lat2, lon2):
-    R = 6371 # Earth radius in KM
-    dLat = math.radians(lat2 - lat1)
-    dLon = math.radians(lon2 - lon1)
-    a = math.sin(dLat/2) * math.sin(dLat/2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon/2) * math.sin(dLon/2)
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
 
 # =====================================================
 # SEND FUNCTION
@@ -247,13 +265,16 @@ def find_and_notify_sellers(customer_data):
                 matched_count += 1
                 shop_name = seller_data.get("shop_name", "Seller")
 
+                # Seller ka number format karo
+                seller_phone_formatted = format_phone(seller_phone)
+
                 # Seller ko message bhejo
-                msg = f"🔔 *New Customer Lead* 🔔\n\n👤 *Customer*: +{cust_phone}\n📍 *Distance*: {distance:.1f} KM away\n📂 *Category*: {categories[cust_category]['title']} > {cust_subcategory}\n📝 *Requirement*: {req_text}\n\nJaldi contact karein!"
+                msg = f"🔔 *New Customer Lead* 🔔\n\n👤 *Customer*: +{cust_phone}\n📍 *Distance*: {distance:.1f} KM away\n🏪 *Shop*: {shop_name}\n📂 *Category*: {categories[cust_category]['title']} > {cust_subcategory}\n📝 *Requirement*: {req_text}\n\nJaldi contact karein!"
 
                 if req_image_id:
-                    send_image(seller_phone, req_image_id, msg)
+                    send_image(seller_phone_formatted, req_image_id, msg)
                 else:
-                    send_text(seller_phone, msg)
+                    send_text(seller_phone_formatted, msg)
 
         cur.close()
         conn.close()
@@ -395,7 +416,7 @@ def webhook():
                 send_text(sender, "📱 अब अपना WhatsApp नंबर लिखें")
 
             elif session["step"] == "whatsapp":
-                session["whatsapp"] = text
+                session["whatsapp"] = format_phone(text) # Auto 91 add ho jayega
                 print("FINAL USER DATA =", session)
 
                 try:
