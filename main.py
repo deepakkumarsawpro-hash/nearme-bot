@@ -4,6 +4,7 @@ import requests
 
 app = Flask(__name__)
 
+# Aapki Details
 PHONE_ID = "1060745180462931"
 TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHhfnbqaWVfcvZA8VqXfY4vm2SmZBBhuU7PpUHbZCCJRTpugaLqdPcbs4moBPtpqxtaOmYtOZCZBPdd1TYIeNLLczx9svvHOazqCy5ah3UHCiGrC169ZBNlk61JOsWO1XVtsgZDZD"
 
@@ -21,52 +22,32 @@ def webhook():
         msg = data['entry'][0]['changes'][0]['value'].get('messages', [{}])[0]
         sender = msg.get('from')
         
-        # 1. Start Step
+        # 1. [span_2](start_span)Welcome Message (Button Design)[span_2](end_span)
         if 'text' in msg and msg['text']['body'].lower() in ['hi', 'hello']:
-            user_sessions[sender] = {'step': 'welcome'}
+            user_sessions[sender] = {'step': 'role'}
             send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "interactive", "interactive": {
-                "type": "button", "body": {"text": "NearMe mein swagat hai!"},
-                "action": {"buttons": [{"type": "reply", "reply": {"id": "sale_service", "title": "सेल & सर्विस"}}]}}})
+                "type": "button", "body": {"text": "नमस्ते! NearMe में आपका स्वागत है। कृपया अपना रोल चुनें:"},
+                "action": {"buttons": [{"type": "reply", "reply": {"id": "role_customer", "title": "ग्राहक"}}, 
+                                     {"type": "reply", "reply": {"id": "role_provider", "title": "सेवा प्रदाता"}}]}}})
 
-        # 2. Location Request (Step 2)
-        elif 'interactive' in msg and msg['interactive'].get('button_reply', {}).get('id') == "sale_service":
-            user_sessions[sender]['step'] = 'location'
-            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {"body": "Apni location bhejein:"}})
-
-        # 3. Handle Category (Step 3)
-        elif 'location' in msg:
-            user_sessions[sender].update({'step': 'category', 'loc': msg['location']})
+        # 2. [span_3](start_span)Category Selection (List Design)[span_3](end_span)
+        elif 'interactive' in msg and msg['interactive'].get('button_reply', {}).get('id', '').startswith('role_'):
+            user_sessions[sender]['step'] = 'category'
             send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "interactive", "interactive": {
-                "type": "list", "header": {"type": "text", "text": "Categories"}, "body": {"text": "Category chunein:"},
-                "action": {"button": "Categories", "sections": [{"title": "Select", "rows": [{"id": "cat_1", "title": "1. Construction"}]}]}}})
+                "type": "list", "header": {"type": "text", "text": "श्रेणी चुनें"}, "body": {"text": "कृपया अपनी श्रेणी चुनें:"},
+                "action": {"button": "श्रेणियाँ", "sections": [{"title": "NearMe Categories", "rows": [
+                    {"id": "cat_construction", "title": "1. निर्माण (Construction)"},
+                    {"id": "cat_auto", "title": "2. ऑटो (Automotive)"},
+                    {"id": "cat_food", "title": "3. भोजन (Food)"}]}]}}})
 
-        # 4. Handle Sub-Category (Step 4)
-        elif 'interactive' in msg and 'list_reply' in msg['interactive'] and user_sessions.get(sender, {}).get('step') == 'category':
-            cat_id = msg['interactive']['list_reply']['id']
-            user_sessions[sender].update({'step': 'subcategory', 'cat': cat_id})
-            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "interactive", "interactive": {
-                "type": "button", "body": {"text": "Sub-Category chunein:"},
-                "action": {"buttons": [{"type": "reply", "reply": {"id": "sub_mason", "title": "Mason"}}]}}})
-
-        # 5. Handle Keywords (Step 5)
-        elif 'interactive' in msg and 'button_reply' in msg['interactive'] and user_sessions.get(sender, {}).get('step') == 'subcategory':
-            sub_id = msg['interactive']['button_reply']['id']
-            user_sessions[sender].update({'step': 'keywords', 'sub': sub_id})
-            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "interactive", "interactive": {
-                "type": "list", "header": {"type": "text", "text": "Keywords"}, "body": {"text": "Keywords chunein:"},
-                "action": {"button": "Keywords", "sections": [{"title": "Select", "rows": [{"id": "kw_raj", "title": "Raj Mistri"}]}]}}})
-
-        # 6. Handle Number (Step 6)
-        elif 'interactive' in msg and 'list_reply' in msg['interactive'] and user_sessions.get(sender, {}).get('step') == 'keywords':
-            user_sessions[sender]['step'] = 'phone'
-            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {"body": "Ab apna WhatsApp Number bhejein:"}})
-
-        # 7. Final Completion
-        elif 'text' in msg and user_sessions.get(sender, {}).get('step') == 'phone':
-            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {"body": "Dhanyavad! Data save ho gaya."}})
+        # 3. [span_4](start_span)Final Confirmation[span_4](end_span)
+        elif 'text' in msg and len(msg['text']['body']) >= 10:
+            send_msg(sender, {"messaging_product": "whatsapp", "to": sender, "type": "text", "text": {
+                "body": "धन्यवाद! आपकी जानकारी सफलतापूर्वक दर्ज कर ली गई है। हमारी टीम जल्द ही आपसे संपर्क करेगी। चुनने के लिए धन्यवाद!"}})
 
     return "OK", 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
     
