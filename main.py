@@ -1,12 +1,11 @@
 import os
 import requests
-
 from flask import Flask, request
 
 app = Flask(__name__)
 
 # =====================================================
-# CONFIG
+# WHATSAPP CONFIG
 # =====================================================
 
 PHONE_ID = "1060745180462931"
@@ -16,45 +15,196 @@ TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHh
 VERIFY_TOKEN = "my_secret_token_123"
 
 # =====================================================
-# SESSION STORAGE
+# USER SESSION
 # =====================================================
 
 user_sessions = {}
 
 # =====================================================
-# CATEGORY DATA
+# FULL CATEGORY DATA
 # =====================================================
 
 categories = {
 
     "construction": {
-        "title": "निर्माण",
-        "subs": ["मिस्त्री", "प्लंबर"]
+
+        "title": "Construction",
+
+        "subs": {
+
+            "Mason":
+            "नींव, ईंट जुड़ाई, प्लास्टर, टाइल्स",
+
+            "Architect":
+            "नक्शा, इंटीरियर डिजाइन, 3D व्यू",
+
+            "Plumber":
+            "पाइप लीकेज, मोटर, टैप फिटिंग",
+
+            "Electrician":
+            "वायरिंग, शॉर्ट-सर्किट, इनवर्टर, बोर्ड रिपेयर",
+
+            "Carpenter":
+            "दरवाजा, खिड़की, बेड/अलमारी फर्नीचर",
+
+            "Paint & Hardware":
+            "वॉल पुट्टी, पेंटिंग, हार्डवेयर सामान"
+        }
     },
 
-    "auto": {
-        "title": "ऑटो",
-        "subs": ["मैकेनिक"]
+    "automotive": {
+
+        "title": "Automotive",
+
+        "subs": {
+
+            "Mechanic":
+            "इंजन रिपेयर, सर्विसिंग, ब्रेक, क्लच",
+
+            "Denting/Painting":
+            "डेंट हटाना, पेंटिंग, पॉलिशिंग",
+
+            "Spare Parts":
+            "ओरिजिनल पार्ट्स, लुब्रिकेंट्स",
+
+            "Washing":
+            "फोम वॉश, इंटरनल क्लीनिंग, वैक्सिंग",
+
+            "Batteries":
+            "बैटरी बदलना, चार्जिंग"
+        }
     },
 
     "food": {
-        "title": "भोजन",
-        "subs": ["रेस्टोरेंट"]
+
+        "title": "Food",
+
+        "subs": {
+
+            "Restaurants":
+            "वेज, नॉन-वेज, थाली, पार्सल",
+
+            "Tiffin":
+            "मंथली मेस, होम मेड खाना",
+
+            "Fast Food":
+            "पिज्जा, बर्गर, मोमोज, चाउमीन",
+
+            "Sweets/Bakery":
+            "केक, मिठाई",
+
+            "Catering":
+            "शादी/पार्टी ऑर्डर",
+
+            "Grocery":
+            "दैनिक राशन सामग्री"
+        }
     },
 
     "retail": {
-        "title": "खुदरा",
-        "subs": ["किराना"]
+
+        "title": "Retail",
+
+        "subs": {
+
+            "Clothing":
+            "मेंस, वुमेंस, किड्स वियर",
+
+            "Electronics":
+            "टीवी, फ्रिज, वाशिंग मशीन",
+
+            "Pharmacy":
+            "दवाइयां, स्वास्थ्य सप्लीमेंट",
+
+            "Footwear":
+            "जूते, चप्पल",
+
+            "Stationery":
+            "कॉपी, किताब, ऑफिस सामान",
+
+            "Mobile/Laptop":
+            "स्क्रीन रिपेयर, बैटरी, चार्जर"
+        }
     },
 
-    "health": {
-        "title": "स्वास्थ्य",
-        "subs": ["डॉक्टर"]
+    "healthcare": {
+
+        "title": "Healthcare",
+
+        "subs": {
+
+            "Doctor":
+            "जनरल फिजिशियन, स्पेशलिस्ट",
+
+            "Clinic":
+            "क्लिनिक सेवाएं",
+
+            "Diagnostic Lab":
+            "ब्लड टेस्ट, एक्स-रे",
+
+            "Medical Store":
+            "दवाइयां",
+
+            "Physiotherapy":
+            "फिजियोथेरेपी सेवाएं",
+
+            "Ambulance":
+            "24/7 इमरजेंसी"
+        }
+    },
+
+    "personal": {
+
+        "title": "Personal Services",
+
+        "subs": {
+
+            "Salon":
+            "हेयर कट, फेशियल",
+
+            "Laundry":
+            "ड्राई क्लीनिंग, प्रेस",
+
+            "Tailoring":
+            "सिलाई सेवाएं",
+
+            "Cleaning":
+            "सोफा/कारपेट क्लीनिंग",
+
+            "Pest Control":
+            "दीमक, कॉकरोच",
+
+            "Courier":
+            "डिलीवरी सेवाएं"
+        }
+    },
+
+    "agriculture": {
+
+        "title": "Agriculture",
+
+        "subs": {
+
+            "Seeds/Fertilizer":
+            "बीज, खाद, कीटनाशक",
+
+            "Farm Equipment":
+            "थ्रेशर, कल्टीवेटर",
+
+            "Tractor Service":
+            "इंजन, टायर रिपेयर",
+
+            "Irrigation":
+            "पंप सेट, पाइप",
+
+            "Veterinary":
+            "पशु चिकित्सा"
+        }
     }
 }
 
 # =====================================================
-# SEND MESSAGE
+# SEND FUNCTION
 # =====================================================
 
 def send(payload):
@@ -66,13 +216,11 @@ def send(payload):
         "Content-Type": "application/json"
     }
 
-    response = requests.post(
+    requests.post(
         url,
         json=payload,
         headers=headers
     )
-
-    print(response.text)
 
 # =====================================================
 # SEND TEXT
@@ -126,10 +274,10 @@ def send_buttons(to, text, buttons):
     send(payload)
 
 # =====================================================
-# SEND LIST
+# SEND CATEGORY LIST
 # =====================================================
 
-def send_list(to):
+def send_category_list(to):
 
     rows = []
 
@@ -140,7 +288,6 @@ def send_list(to):
             "id": key,
 
             "title": value["title"]
-
         })
 
     payload = {
@@ -161,17 +308,17 @@ def send_list(to):
             },
 
             "body": {
-                "text": "📂 कृपया श्रेणी चुनें"
+                "text": "📂 कृपया Category चुनें"
             },
 
             "action": {
 
-                "button": "श्रेणियाँ",
+                "button": "Open Categories",
 
                 "sections": [
 
                     {
-                        "title": "Available Categories",
+                        "title": "Categories",
                         "rows": rows
                     }
                 ]
@@ -182,7 +329,7 @@ def send_list(to):
     send(payload)
 
 # =====================================================
-# VERIFY WEBHOOK
+# WEBHOOK VERIFY
 # =====================================================
 
 @app.route("/webhook", methods=["GET"])
@@ -202,7 +349,7 @@ def verify():
     return "Verification failed", 403
 
 # =====================================================
-# WEBHOOK
+# MAIN WEBHOOK
 # =====================================================
 
 @app.route("/webhook", methods=["POST"])
@@ -213,21 +360,11 @@ def webhook():
 
         data = request.get_json()
 
-        print(data)
-
         if "entry" not in data:
             return "OK", 200
 
-        changes = data["entry"][0]["changes"][0]
-
-        value = changes["value"]
-
-        messages = value.get("messages")
-
-        if not messages:
-            return "OK", 200
-
-        msg = messages[0]
+        msg = data["entry"][0]["changes"][0]["value"] \
+        .get("messages", [{}])[0]
 
         sender = msg.get("from")
 
@@ -241,6 +378,7 @@ def webhook():
         if sender not in user_sessions:
 
             user_sessions[sender] = {
+
                 "step": "role"
             }
 
@@ -251,7 +389,7 @@ def webhook():
 
                     "reply": {
                         "id": "customer",
-                        "title": "ग्राहक"
+                        "title": "Customer"
                     }
                 },
 
@@ -260,7 +398,7 @@ def webhook():
 
                     "reply": {
                         "id": "seller",
-                        "title": "सेवा प्रदाता"
+                        "title": "Seller"
                     }
                 }
             ]
@@ -269,8 +407,7 @@ def webhook():
 
                 sender,
 
-                "🙏 नमस्ते\n\n"
-                "Near Me Marketplace में आपका स्वागत है।\n\n"
+                "🙏 Welcome to Near Me Marketplace\n\n"
                 "कृपया अपना रोल चुनें:",
 
                 buttons
@@ -281,7 +418,7 @@ def webhook():
         session = user_sessions[sender]
 
         # =================================================
-        # BUTTON REPLY
+        # INTERACTIVE
         # =================================================
 
         if "interactive" in msg:
@@ -302,8 +439,6 @@ def webhook():
 
                     session["role"] = button_id
 
-                    # CUSTOMER FLOW
-
                     if button_id == "customer":
 
                         session["step"] = "distance"
@@ -314,7 +449,7 @@ def webhook():
                                 "type": "reply",
 
                                 "reply": {
-                                    "id": "1_km",
+                                    "id": "1 KM",
                                     "title": "1 KM"
                                 }
                             },
@@ -323,7 +458,7 @@ def webhook():
                                 "type": "reply",
 
                                 "reply": {
-                                    "id": "5_km",
+                                    "id": "5 KM",
                                     "title": "5 KM"
                                 }
                             },
@@ -332,7 +467,7 @@ def webhook():
                                 "type": "reply",
 
                                 "reply": {
-                                    "id": "10_km",
+                                    "id": "10 KM",
                                     "title": "10 KM"
                                 }
                             }
@@ -347,8 +482,6 @@ def webhook():
                             buttons
                         )
 
-                    # SELLER FLOW
-
                     else:
 
                         session["step"] = "shop_name"
@@ -357,7 +490,7 @@ def webhook():
 
                             sender,
 
-                            "🏪 कृपया दुकान / सेवा का नाम लिखें"
+                            "🏪 अपनी दुकान / सेवा का नाम लिखें"
                         )
 
                 # DISTANCE
@@ -381,13 +514,13 @@ def webhook():
 
                     session["subcategory"] = button_id
 
-                    session["step"] = "whatsapp"
+                    session["step"] = "requirement"
 
                     send_text(
 
                         sender,
 
-                        "📱 अपना WhatsApp नंबर लिखें"
+                        "📝 अपनी पूरी जरूरत / requirement लिखिए"
                     )
 
             # =============================================
@@ -398,17 +531,19 @@ def webhook():
 
                 row_id = interactive["list_reply"]["id"]
 
+                # CATEGORY
+
                 if session["step"] == "category":
 
                     session["category"] = row_id
 
                     session["step"] = "subcategory"
 
-                    subs = categories[row_id]["subs"]
-
                     buttons = []
 
-                    for sub in subs:
+                    subs = categories[row_id]["subs"]
+
+                    for sub, keyword in subs.items():
 
                         buttons.append({
 
@@ -416,7 +551,7 @@ def webhook():
 
                             "reply": {
                                 "id": sub,
-                                "title": sub
+                                "title": sub[:20]
                             }
                         })
 
@@ -424,7 +559,7 @@ def webhook():
 
                         sender,
 
-                        "🛠 उप-श्रेणी चुनें",
+                        "🛠 Sub Category चुनें",
 
                         buttons[:3]
                     )
@@ -443,7 +578,7 @@ def webhook():
 
                 session["step"] = "category"
 
-                send_list(sender)
+                send_category_list(sender)
 
             # SELLER LOCATION
 
@@ -453,7 +588,7 @@ def webhook():
 
                 session["step"] = "category"
 
-                send_list(sender)
+                send_category_list(sender)
 
         # =================================================
         # TEXT MESSAGE
@@ -478,13 +613,28 @@ def webhook():
                     "📍 अब दुकान की लोकेशन Share करें"
                 )
 
-            # WHATSAPP NUMBER
+            # REQUIREMENT
+
+            elif session["step"] == "requirement":
+
+                session["requirement"] = text
+
+                session["step"] = "whatsapp"
+
+                send_text(
+
+                    sender,
+
+                    "📱 अपना WhatsApp नंबर लिखें"
+                )
+
+            # WHATSAPP
 
             elif session["step"] == "whatsapp":
 
                 session["whatsapp"] = text
 
-                print("FINAL DATA =")
+                print("FINAL USER DATA =")
                 print(session)
 
                 send_text(
@@ -492,7 +642,8 @@ def webhook():
                     sender,
 
                     "✅ धन्यवाद 🙏\n\n"
-                    "आपकी जानकारी सफलतापूर्वक दर्ज हो गई है।"
+                    "आपकी जानकारी सफलतापूर्वक दर्ज हो गई है।\n\n"
+                    "हमारी टीम जल्द ही आपसे संपर्क करेगी।"
                 )
 
                 del user_sessions[sender]
@@ -526,4 +677,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=port
-    )
+                )
