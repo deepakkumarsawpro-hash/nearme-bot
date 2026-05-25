@@ -131,4 +131,30 @@ def send(payload):
 
 def send_text(to, text):
     payload = {
-        "messaging_product":
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {"body": text}
+    }
+    send(payload)
+
+# =====================================================
+# SEND BUTTONS
+# =====================================================
+
+def send_buttons(to, text, buttons):
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": text},
+            "action": {"buttons": buttons}
+        }
+    }
+    send(payload)
+
+# =====================================================
+# SEND CATEGORY LIST
+# =====================================================
