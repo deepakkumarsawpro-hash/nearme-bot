@@ -8,11 +8,11 @@ app = Flask(__name__)
 # WHATSAPP CONFIG
 # =====================================================
 
-PHONE_ID = "YOUR_PHONE_NUMBER_ID"
+PHONE_ID = "YOUR_PHONE_ID"
 
-TOKEN = "YOUR_PERMANENT_TOKEN"
+TOKEN = "YOUR_ACCESS_TOKEN"
 
-VERIFY_TOKEN = "nearmeverify"
+VERIFY_TOKEN = "verifytoken"
 
 # =====================================================
 # USER SESSIONS
@@ -27,52 +27,27 @@ user_sessions = {}
 categories = {
     "construction": {
         "title": "निर्माण",
-        "subs": [
-            "मिस्त्री",
-            "प्लंबर"
-        ]
+        "subs": ["मिस्त्री", "प्लंबर"]
     },
 
     "auto": {
         "title": "ऑटो",
-        "subs": [
-            "मैकेनिक"
-        ]
+        "subs": ["मैकेनिक"]
     },
 
     "food": {
         "title": "भोजन",
-        "subs": [
-            "रेस्टोरेंट"
-        ]
+        "subs": ["रेस्टोरेंट"]
     },
 
     "retail": {
         "title": "खुदरा",
-        "subs": [
-            "किराना"
-        ]
+        "subs": ["किराना"]
     },
 
     "health": {
         "title": "स्वास्थ्य",
-        "subs": [
-            "डॉक्टर"
-        ]
-    },
-
-    "personal": {
-        "title": "व्यक्तिगत",
-        "subs": [
-            "सैलून"
-        ]
-    },
-
-    "agriculture": {
-        "title": "कृषि",
-        "subs": [
-            "बीज"
-        ]
+        "subs": ["डॉक्टर"]
     }
 }
 
@@ -89,16 +64,10 @@ def send_message(payload):
         "Content-Type": "application/json"
     }
 
-    response = requests.post(
-        url,
-        json=payload,
-        headers=headers
-    )
-
-    print(response.text)
+    requests.post(url, json=payload, headers=headers)
 
 # =====================================================
-# SIMPLE TEXT
+# SEND TEXT
 # =====================================================
 
 def send_text(to, text):
@@ -115,7 +84,7 @@ def send_text(to, text):
     send_message(payload)
 
 # =====================================================
-# BUTTON MESSAGE
+# SEND BUTTONS
 # =====================================================
 
 def send_buttons(to, text, buttons):
@@ -124,11 +93,15 @@ def send_buttons(to, text, buttons):
         "messaging_product": "whatsapp",
         "to": to,
         "type": "interactive",
+
         "interactive": {
+
             "type": "button",
+
             "body": {
                 "text": text
             },
+
             "action": {
                 "buttons": buttons
             }
@@ -138,16 +111,18 @@ def send_buttons(to, text, buttons):
     send_message(payload)
 
 # =====================================================
-# LIST MESSAGE
+# SEND LIST
 # =====================================================
 
-def send_list(to, body_text, rows):
+def send_list(to, rows):
 
     payload = {
         "messaging_product": "whatsapp",
         "to": to,
         "type": "interactive",
+
         "interactive": {
+
             "type": "list",
 
             "header": {
@@ -156,19 +131,17 @@ def send_list(to, body_text, rows):
             },
 
             "body": {
-                "text": body_text
-            },
-
-            "footer": {
-                "text": "कृपया विकल्प चुनें"
+                "text": "कृपया श्रेणी चुनें"
             },
 
             "action": {
-                "button": "Open List",
+
+                "button": "श्रेणियाँ",
 
                 "sections": [
+
                     {
-                        "title": "Available Options",
+                        "title": "Available Categories",
                         "rows": rows
                     }
                 ]
@@ -192,11 +165,9 @@ def verify():
 
     challenge = request.args.get("hub.challenge")
 
-    if mode and token:
+    if mode == "subscribe" and token == VERIFY_TOKEN:
 
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-
-            return challenge, 200
+        return challenge, 200
 
     return "Verification failed", 403
 
@@ -214,26 +185,23 @@ def webhook():
 
         if "entry" in data:
 
-            changes = data["entry"][0]["changes"][0]
+            msg = data["entry"][0]["changes"][0]["value"] \
+            .get("messages", [{}])[0]
 
-            value = changes["value"]
+            sender = msg.get("from")
 
-            messages = value.get("messages")
-
-            if not messages:
+            if not sender:
                 return "OK", 200
 
-            msg = messages[0]
-
-            sender = msg["from"]
-
             # =====================================================
-            # START BOT
+            # START
             # =====================================================
 
             if "text" in msg:
 
                 text = msg["text"]["body"].lower()
+
+                # START BOT
 
                 if text in ["hi", "hello", "start"]:
 
@@ -245,6 +213,7 @@ def webhook():
 
                         {
                             "type": "reply",
+
                             "reply": {
                                 "id": "customer",
                                 "title": "ग्राहक"
@@ -253,6 +222,7 @@ def webhook():
 
                         {
                             "type": "reply",
+
                             "reply": {
                                 "id": "seller",
                                 "title": "सेवा प्रदाता"
@@ -261,6 +231,7 @@ def webhook():
                     ]
 
                     send_buttons(
+
                         sender,
 
                         "🙏 नमस्ते\n\n"
@@ -273,7 +244,7 @@ def webhook():
                     return "OK", 200
 
             # =====================================================
-            # BUTTON CLICK
+            # BUTTON REPLY
             # =====================================================
 
             if "interactive" in msg:
@@ -281,68 +252,85 @@ def webhook():
                 interactive = msg["interactive"]
 
                 # =====================================================
-                # BUTTON REPLY
+                # BUTTON CLICK
                 # =====================================================
 
                 if interactive["type"] == "button_reply":
 
                     button_id = interactive["button_reply"]["id"]
 
-                    session = user_sessions.get(sender, {})
+                    session = user_sessions.get(sender)
 
-                    # =====================================================
-                    # ROLE SELECT
-                    # =====================================================
+                    # ================================================
+                    # ROLE
+                    # ================================================
 
-                    if session.get("step") == "role":
+                    if session["step"] == "role":
 
                         session["role"] = button_id
 
-                        session["step"] = "distance"
+                        # CUSTOMER
 
-                        buttons = [
+                        if button_id == "customer":
 
-                            {
-                                "type": "reply",
-                                "reply": {
-                                    "id": "1_km",
-                                    "title": "1 KM"
+                            session["step"] = "distance"
+
+                            buttons = [
+
+                                {
+                                    "type": "reply",
+                                    "reply": {
+                                        "id": "1_km",
+                                        "title": "1 KM"
+                                    }
+                                },
+
+                                {
+                                    "type": "reply",
+                                    "reply": {
+                                        "id": "5_km",
+                                        "title": "5 KM"
+                                    }
+                                },
+
+                                {
+                                    "type": "reply",
+                                    "reply": {
+                                        "id": "10_km",
+                                        "title": "10 KM"
+                                    }
                                 }
-                            },
+                            ]
 
-                            {
-                                "type": "reply",
-                                "reply": {
-                                    "id": "5_km",
-                                    "title": "5 KM"
-                                }
-                            },
+                            send_buttons(
 
-                            {
-                                "type": "reply",
-                                "reply": {
-                                    "id": "10_km",
-                                    "title": "10 KM"
-                                }
-                            }
-                        ]
+                                sender,
 
-                        send_buttons(
+                                "📍 आप कितनी दूरी में सेवा चाहते हैं?",
 
-                            sender,
+                                buttons
+                            )
 
-                            "📍 कृपया दूरी चुनें:",
+                        # SELLER
 
-                            buttons
-                        )
+                        else:
+
+                            session["step"] = "shop_name"
+
+                            send_text(
+
+                                sender,
+
+                                "🏪 कृपया दुकान / सेवा का नाम लिखें"
+                            )
 
                         return "OK", 200
 
-                    # =====================================================
-                    # DISTANCE SELECT
-                    # =====================================================
+                    # ================================================
+                    # DISTANCE
+                    # ================================================
 
-                    elif session.get("step") == "distance":
+                    elif session["step"] == "distance":
 
                         session["distance"] = button_id
 
@@ -352,110 +340,56 @@ def webhook():
 
                             sender,
 
-                            "📍 अब WhatsApp से अपनी लोकेशन Share करें"
+                            "📍 अब अपनी WhatsApp लोकेशन Share करें"
                         )
 
                         return "OK", 200
 
-                    # =====================================================
-                    # SUBCATEGORY SELECT
-                    # =====================================================
+                    # ================================================
+                    # SUBCATEGORY
+                    # ================================================
 
-                    elif session.get("step") == "subcategory":
+                    elif session["step"] == "subcategory":
 
                         session["subcategory"] = button_id
 
-                        session["step"] = "confirm"
-
-                        buttons = [
-
-                            {
-                                "type": "reply",
-                                "reply": {
-                                    "id": "submit",
-                                    "title": "Submit"
-                                }
-                            },
-
-                            {
-                                "type": "reply",
-                                "reply": {
-                                    "id": "restart",
-                                    "title": "Restart"
-                                }
-                            }
-                        ]
-
-                        send_buttons(
+                        send_text(
 
                             sender,
 
-                            "✅ जानकारी पूरी हो गई।\n\n"
-                            "Submit करने के लिए नीचे क्लिक करें।",
-
-                            buttons
+                            "✅ धन्यवाद!\n\n"
+                            "आपकी जानकारी सफलतापूर्वक दर्ज कर ली गई है।"
                         )
 
-                        return "OK", 200
+                        print(session)
 
-                    # =====================================================
-                    # FINAL SUBMIT
-                    # =====================================================
-
-                    elif session.get("step") == "confirm":
-
-                        if button_id == "submit":
-
-                            print("FINAL USER DATA =")
-                            print(session)
-
-                            send_text(
-
-                                sender,
-
-                                "🎉 धन्यवाद!\n\n"
-                                "आपकी जानकारी सफलतापूर्वक दर्ज कर ली गई है।\n\n"
-                                "हमारी टीम जल्द ही आपसे संपर्क करेगी।"
-                            )
-
-                            del user_sessions[sender]
-
-                        else:
-
-                            del user_sessions[sender]
-
-                            send_text(
-                                sender,
-                                "♻️ Restart हो गया।\n\nHi भेजें।"
-                            )
+                        del user_sessions[sender]
 
                         return "OK", 200
 
                 # =====================================================
-                # LIST REPLY
+                # LIST CLICK
                 # =====================================================
 
                 elif interactive["type"] == "list_reply":
 
                     row_id = interactive["list_reply"]["id"]
 
-                    session = user_sessions.get(sender, {})
+                    session = user_sessions.get(sender)
 
-                    # =====================================================
-                    # CATEGORY SELECT
-                    # =====================================================
+                    # CATEGORY
 
-                    if session.get("step") == "category":
+                    if session["step"] == "category":
 
                         session["category"] = row_id
 
                         session["step"] = "subcategory"
 
-                        subcategories = categories[row_id]["subs"]
+                        subs = categories[row_id]["subs"]
 
                         buttons = []
 
-                        for sub in subcategories:
+                        for sub in subs:
 
                             buttons.append({
 
@@ -463,7 +397,7 @@ def webhook():
 
                                 "reply": {
                                     "id": sub,
-                                    "title": sub[:20]
+                                    "title": sub
                                 }
                             })
 
@@ -471,7 +405,7 @@ def webhook():
 
                             sender,
 
-                            "🛠 उप-श्रेणी चुनें:",
+                            "🛠 उप-श्रेणी चुनें",
 
                             buttons[:3]
                         )
@@ -479,14 +413,16 @@ def webhook():
                         return "OK", 200
 
             # =====================================================
-            # LOCATION RECEIVED
+            # LOCATION
             # =====================================================
 
             if "location" in msg:
 
-                session = user_sessions.get(sender, {})
+                session = user_sessions.get(sender)
 
-                if session.get("step") == "location":
+                # CUSTOMER LOCATION
+
+                if session["step"] == "location":
 
                     session["location"] = msg["location"]
 
@@ -500,19 +436,62 @@ def webhook():
 
                             "id": key,
 
-                            "title": val["title"],
-
-                            "description": "Click to select"
+                            "title": val["title"]
                         })
 
-                    send_list(
+                    send_list(sender, rows)
+
+                    return "OK", 200
+
+            # =====================================================
+            # SELLER SHOP NAME
+            # =====================================================
+
+            if "text" in msg:
+
+                session = user_sessions.get(sender)
+
+                if session and session["step"] == "shop_name":
+
+                    session["shop_name"] = msg["text"]["body"]
+
+                    session["step"] = "seller_location"
+
+                    send_text(
 
                         sender,
 
-                        "📂 कृपया श्रेणी चुनें:",
-
-                        rows
+                        "📍 अब अपनी दुकान की लोकेशन Share करें"
                     )
+
+                    return "OK", 200
+
+            # =====================================================
+            # SELLER LOCATION
+            # =====================================================
+
+            if "location" in msg:
+
+                session = user_sessions.get(sender)
+
+                if session and session["step"] == "seller_location":
+
+                    session["location"] = msg["location"]
+
+                    session["step"] = "category"
+
+                    rows = []
+
+                    for key, val in categories.items():
+
+                        rows.append({
+
+                            "id": key,
+
+                            "title": val["title"]
+                        })
+
+                    send_list(sender, rows)
 
                     return "OK", 200
 
@@ -533,7 +512,7 @@ def home():
     return "Near Me Marketplace Bot Running"
 
 # =====================================================
-# RUN SERVER
+# RUN
 # =====================================================
 
 if __name__ == "__main__":
@@ -543,4 +522,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=port
-    )
+                )
