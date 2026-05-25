@@ -1,8 +1,23 @@
 import os
 import requests
 from flask import Flask, request
+# DB ke liye ye 2 line add karo
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import redis
 
 app = Flask(__name__)
+
+# =====================================================
+# DATABASE + REDIS CONNECTION
+# =====================================================
+def get_db_connection():
+    conn = psycopg2.connect(os.getenv('DATABASE_URL'), cursor_factory=RealDictCursor)
+    return conn
+
+def get_redis_connection():
+    r = redis.from_url(os.getenv('REDIS_URL'))
+    return r
 
 # =====================================================
 # WHATSAPP CONFIG
@@ -15,10 +30,13 @@ TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHh
 VERIFY_TOKEN = "my_secret_token_123"
 
 # =====================================================
-# USER SESSION
+# USER SESSION - Ab Redis me save karenge
 # =====================================================
 
-user_sessions = {}
+# user_sessions = {} # Purana wala hata do
+
+def get_redis():
+    return redis.from_url(os.getenv('REDIS_URL'))
 
 # =====================================================
 # FULL CATEGORY DATA
@@ -329,6 +347,24 @@ def send_category_list(to):
     send(payload)
 
 # =====================================================
+# DB CHECK ROUTE - Naya add kiya
+# =====================================================
+@app.route("/db-check")
+def db_check():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT 1;')
+        cur.close()
+        conn.close()
+        
+        r = get_redis_connection()
+        r.ping()
+        return "Database + Redis Connected ✅"
+    except Exception as e:
+        return f"Connection Failed ❌ {e}"
+
+# =====================================================
 # WEBHOOK VERIFY
 # =====================================================
 
@@ -364,23 +400,23 @@ def webhook():
             return "OK", 200
 
         msg = data["entry"][0]["changes"][0]["value"] \
-        .get("messages", [{}])[0]
+       .get("messages", [{}])[0]
 
         sender = msg.get("from")
 
         if not sender:
             return "OK", 200
 
-        # =================================================
-        # AUTO START
-        # =================================================
-
-        if sender not in user_sessions:
-
-            user_sessions[sender] = {
-
-                "step": "role"
-            }
+        # Redis se session nikalo
+        r = get_redis()
+        session_data = r.get(f"session:{sender}")
+        
+        if not session_data:
+            # =================================================
+            # AUTO START
+            # =================================================
+            session = {"step": "role"}
+            r.set(f"session:{sender}", str(session))
 
             buttons = [
 
@@ -415,7 +451,7 @@ def webhook():
 
             return "OK", 200
 
-        session = user_sessions[sender]
+        session = eval(session_data)
 
         # =================================================
         # INTERACTIVE
@@ -635,6 +671,20 @@ def webhook():
                 print("FINAL USER DATA =")
                 print(session)
 
+                # Database me save karo
+                try:
+                    conn = get_db_connection()
+                    cur = conn.cursor()
+                    cur.execute(
+                        "INSERT INTO leads (phone, data) VALUES (%s, %s)",
+                        (sender, str(session))
+                    )
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+                except Exception as db_error:
+                    print(f"DB Save Error: {db_error}")
+
                 send_text(
 
                     sender,
@@ -644,7 +694,7 @@ def webhook():
                     "हमारी टीम जल्द ही आपसे संपर्क करेगी।"
                 )
 
-                del user_sessions[sender]
+                r.delete(f"session:{sender}")
 
         # =================================================
         # IMAGE MESSAGE
@@ -672,6 +722,8 @@ def webhook():
                     "📱 अब अपना WhatsApp नंबर लिखें"
                 )
 
+        # Session Redis me update karo
+        r.set(f"session:{sender}", str(session))
         return "OK", 200
 
     except Exception as e:
@@ -688,7 +740,7 @@ def webhook():
 
 def home():
 
-    return "Near Me Marketplace Bot Running"
+    return "Near Me Marketplace Bot Running ✅"
 
 # =====================================================
 # RUN
@@ -701,4 +753,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=port
-    )
+)
