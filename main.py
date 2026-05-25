@@ -1,416 +1,447 @@
-from flask import Flask, request, jsonify, render_template_string
-import json
 import os
+from flask import Flask, request
+import requests
 
 app = Flask(__name__)
 
-# --------------------------
-# Categories
-# --------------------------
+# -----------------------------------
+# WHATSAPP API CONFIG
+# -----------------------------------
+
+PHONE_ID = "1060745180462931"
+
+TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHhfnbqaWVfcvZA8VqXfY4vm2SmZBBhuU7PpUHbZCCJRTpugaLqdPcbs4moBPtpqxtaOmYtOZCZBPdd1TYIeNLLczx9svvHOazqCy5ah3UHCiGrC169ZBNlk61JOsWO1XVtsgZDZD"
+
+VERIFY_TOKEN = "my_secret_token_123"
+
+# -----------------------------------
+# USER SESSIONS
+# -----------------------------------
+
+user_sessions = {}
+
+# -----------------------------------
+# CATEGORY DATA
+# -----------------------------------
 
 categories = {
-    "निर्माण": ["मिस्त्री", "प्लंबर"],
-    "ऑटो": ["मैकेनिक"],
-    "भोजन": ["रेस्टोरेंट"],
-    "खुदरा": ["किराना"],
-    "स्वास्थ्य": ["डॉक्टर"],
-    "व्यक्तिगत": ["सैलून"],
-    "कृषि": ["बीज"]
+    "construction": {
+        "title": "निर्माण",
+        "subs": ["मिस्त्री", "प्लंबर"]
+    },
+    "auto": {
+        "title": "ऑटो",
+        "subs": ["मैकेनिक"]
+    },
+    "food": {
+        "title": "भोजन",
+        "subs": ["रेस्टोरेंट"]
+    },
+    "retail": {
+        "title": "खुदरा",
+        "subs": ["किराना"]
+    },
+    "health": {
+        "title": "स्वास्थ्य",
+        "subs": ["डॉक्टर"]
+    },
+    "personal": {
+        "title": "व्यक्तिगत",
+        "subs": ["सैलून"]
+    },
+    "agriculture": {
+        "title": "कृषि",
+        "subs": ["बीज"]
+    }
 }
 
-# --------------------------
-# Sessions
-# --------------------------
+# -----------------------------------
+# SEND MESSAGE FUNCTION
+# -----------------------------------
 
-sessions = {}
+def send_msg(payload):
 
-# --------------------------
-# Save Data
-# --------------------------
+    url = f"https://graph.facebook.com/v21.0/{PHONE_ID}/messages"
 
-def save_data(data):
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Content-Type": "application/json"
+    }
 
-    file_name = "data.json"
+    requests.post(url, json=payload, headers=headers)
 
-    if os.path.exists(file_name):
-        with open(file_name, "r", encoding="utf-8") as file:
-            try:
-                old = json.load(file)
-            except:
-                old = []
-    else:
-        old = []
+# -----------------------------------
+# WEBHOOK VERIFY
+# -----------------------------------
 
-    old.append(data)
+@app.route("/webhook", methods=["GET"])
 
-    with open(file_name, "w", encoding="utf-8") as file:
-        json.dump(old, file, ensure_ascii=False, indent=4)
+def verify():
 
-# --------------------------
-# HTML UI
-# --------------------------
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
 
-HTML = '''
+    if mode and token:
 
-<!DOCTYPE html>
-<html>
-<head>
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            return challenge, 200
 
-<title>Near Me Marketplace</title>
+    return "Verification failed", 403
 
-<style>
+# -----------------------------------
+# MAIN WEBHOOK
+# -----------------------------------
 
-body{
-font-family:Arial;
-background:#f2f2f2;
-padding:20px;
-}
+@app.route("/webhook", methods=["POST"])
 
-.chat{
-max-width:500px;
-margin:auto;
-background:white;
-padding:20px;
-border-radius:10px;
-box-shadow:0px 0px 10px #ccc;
-}
+def webhook():
 
-.messages{
-height:400px;
-overflow-y:auto;
-border:1px solid #ddd;
-padding:10px;
-margin-bottom:10px;
-}
+    data = request.get_json()
 
-.user{
-text-align:right;
-margin:10px;
-color:blue;
-}
+    try:
 
-.bot{
-text-align:left;
-margin:10px;
-color:green;
-}
+        if "entry" in data:
 
-input{
-width:75%;
-padding:10px;
-}
+            msg = data["entry"][0]["changes"][0]["value"].get("messages", [{}])[0]
 
-button{
-padding:10px;
-background:#28a745;
-color:white;
-border:none;
-cursor:pointer;
-}
+            sender = msg.get("from")
 
-</style>
+            if not sender:
+                return "OK", 200
 
-</head>
+            # -----------------------------------
+            # START MESSAGE
+            # -----------------------------------
 
-<body>
+            if "text" in msg:
 
-<div class="chat">
+                text = msg["text"]["body"].lower()
 
-<h2>Near Me Marketplace</h2>
+                if text in ["hi", "hello", "start"]:
 
-<div class="messages" id="messages"></div>
+                    user_sessions[sender] = {
+                        "step": "role"
+                    }
 
-<input type="text" id="msg" placeholder="Message लिखें">
+                    send_msg({
+                        "messaging_product": "whatsapp",
+                        "to": sender,
+                        "type": "interactive",
+                        "interactive": {
+                            "type": "button",
+                            "body": {
+                                "text":
+                                "नमस्ते 🙏\n\nNear Me Marketplace में आपका स्वागत है।\n\nकृपया अपना रोल चुनें:"
+                            },
+                            "action": {
+                                "buttons": [
+                                    {
+                                        "type": "reply",
+                                        "reply": {
+                                            "id": "customer",
+                                            "title": "ग्राहक"
+                                        }
+                                    },
+                                    {
+                                        "type": "reply",
+                                        "reply": {
+                                            "id": "seller",
+                                            "title": "सेवा प्रदाता"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    })
 
-<button onclick="send()">Send</button>
+            # -----------------------------------
+            # ROLE SELECT
+            # -----------------------------------
 
-</div>
+            elif "interactive" in msg and \
+            "button_reply" in msg["interactive"]:
 
-<script>
+                reply_id = msg["interactive"]["button_reply"]["id"]
 
-const user_id = "demo_user";
+                session = user_sessions.get(sender, {})
+
+                # CUSTOMER / SELLER
+
+                if session.get("step") == "role":
+
+                    session["role"] = reply_id
+
+                    # CUSTOMER FLOW
+
+                    if reply_id == "customer":
+
+                        session["step"] = "distance"
+
+                        send_msg({
+                            "messaging_product": "whatsapp",
+                            "to": sender,
+                            "type": "text",
+                            "text": {
+                                "body":
+                                "कृपया दूरी दर्ज करें।\n\nउदाहरण: 5 KM"
+                            }
+                        })
 
-async function send(){
+                    # SELLER FLOW
 
-let input = document.getElementById("msg");
+                    else:
 
-let message = input.value;
+                        session["step"] = "shop_name"
 
-if(message == "") return;
+                        send_msg({
+                            "messaging_product": "whatsapp",
+                            "to": sender,
+                            "type": "text",
+                            "text": {
+                                "body":
+                                "कृपया दुकान का नाम दर्ज करें"
+                            }
+                        })
+
+            # -----------------------------------
+            # CUSTOMER DISTANCE
+            # -----------------------------------
+
+            elif "text" in msg and \
+            user_sessions.get(sender, {}).get("step") == "distance":
+
+                user_sessions[sender]["distance"] = msg["text"]["body"]
+
+                user_sessions[sender]["step"] = "location"
+
+                send_msg({
+                    "messaging_product": "whatsapp",
+                    "to": sender,
+                    "type": "text",
+                    "text": {
+                        "body":
+                        "कृपया अपनी लोकेशन Share करें"
+                    }
+                })
+
+            # -----------------------------------
+            # SELLER SHOP NAME
+            # -----------------------------------
+
+            elif "text" in msg and \
+            user_sessions.get(sender, {}).get("step") == "shop_name":
+
+                user_sessions[sender]["shop_name"] = msg["text"]["body"]
+
+                user_sessions[sender]["step"] = "category"
+
+                rows = []
+
+                for key, val in categories.items():
 
-let box = document.getElementById("messages");
-
-box.innerHTML += `<div class='user'>${message}</div>`;
-
-input.value = "";
-
-const response = await fetch("/chat",{
-
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
-},
-
-body:JSON.stringify({
-user_id:user_id,
-message:message
-})
-
-});
-
-const data = await response.json();
-
-box.innerHTML += `<div class='bot'>${data.reply}</div>`;
-
-box.scrollTop = box.scrollHeight;
-
-}
-
-window.onload = async function(){
-
-const response = await fetch("/chat",{
-
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
-},
-
-body:JSON.stringify({
-user_id:user_id,
-message:"start"
-})
-
-});
-
-const data = await response.json();
-
-document.getElementById("messages").innerHTML +=
-`<div class='bot'>${data.reply}</div>`;
-
-}
-
-</script>
-
-</body>
-</html>
-
-'''
-
-# --------------------------
-# Home
-# --------------------------
-
-@app.route("/")
-def home():
-    return render_template_string(HTML)
-
-# --------------------------
-# Chat API
-# --------------------------
-
-@app.route("/chat", methods=["POST"])
-def chat():
-
-    data = request.json
-
-    user_id = data["user_id"]
-    message = data["message"]
-
-    if user_id not in sessions:
-        sessions[user_id] = {
-            "step": "welcome"
-        }
-
-    session = sessions[user_id]
-
-    # Welcome
-
-    if session["step"] == "welcome":
-
-        session["step"] = "role"
-
-        return jsonify({
-            "reply":
-            "नमस्ते 🙏\\n\\nNear Me Marketplace में आपका स्वागत है।\\n\\nअपना रोल चुनें:\\n\\n1. Customer\\n2. Seller"
-        })
-
-    # Role
-
-    elif session["step"] == "role":
-
-        session["role"] = message
-
-        if message.lower() == "customer":
-
-            session["step"] = "distance"
-
-            return jsonify({
-                "reply":"कृपया दूरी दर्ज करें (उदाहरण: 5 KM)"
-            })
-
-        elif message.lower() == "seller":
-
-            session["step"] = "shop"
-
-            return jsonify({
-                "reply":"दुकान का नाम दर्ज करें"
-            })
-
-        else:
-
-            return jsonify({
-                "reply":"केवल Customer या Seller लिखें"
-            })
-
-    # Customer
-
-    elif session["step"] == "distance":
-
-        session["distance"] = message
-        session["step"] = "location"
-
-        return jsonify({
-            "reply":"अपनी लोकेशन दर्ज करें"
-        })
-
-    elif session["step"] == "location":
-
-        session["location"] = message
-        session["step"] = "category"
-
-        cats = "\\n".join(categories.keys())
-
-        return jsonify({
-            "reply":f"श्रेणी चुनें:\\n\\n{cats}"
-        })
-
-    elif session["step"] == "category":
-
-        if message not in categories:
-
-            return jsonify({
-                "reply":"सही श्रेणी चुनें"
-            })
-
-        session["category"] = message
-
-        subs = "\\n".join(categories[message])
-
-        session["step"] = "subcategory"
-
-        return jsonify({
-            "reply":f"उप-श्रेणी चुनें:\\n\\n{subs}"
-        })
-
-    elif session["step"] == "subcategory":
-
-        session["subcategory"] = message
-        session["step"] = "other"
-
-        return jsonify({
-            "reply":"अन्य जानकारी लिखें"
-        })
-
-    elif session["step"] == "other":
-
-        session["other"] = message
-        session["step"] = "whatsapp"
-
-        return jsonify({
-            "reply":"WhatsApp नंबर दर्ज करें"
-        })
-
-    elif session["step"] == "whatsapp":
-
-        session["whatsapp"] = message
-
-        save_data(session)
-
-        sessions.pop(user_id)
-
-        return jsonify({
-            "reply":"धन्यवाद 🙏\\n\\nआपकी जानकारी सफलतापूर्वक दर्ज कर ली गई है।"
-        })
-
-    # Seller
-
-    elif session["step"] == "shop":
-
-        session["shop_name"] = message
-        session["step"] = "seller_category"
-
-        cats = "\\n".join(categories.keys())
-
-        return jsonify({
-            "reply":f"श्रेणी चुनें:\\n\\n{cats}"
-        })
-
-    elif session["step"] == "seller_category":
-
-        if message not in categories:
-
-            return jsonify({
-                "reply":"सही श्रेणी चुनें"
-            })
-
-        session["category"] = message
-
-        subs = "\\n".join(categories[message])
-
-        session["step"] = "seller_sub"
-
-        return jsonify({
-            "reply":f"उप-श्रेणी चुनें:\\n\\n{subs}"
-        })
-
-    elif session["step"] == "seller_sub":
-
-        session["subcategory"] = message
-        session["step"] = "seller_other"
-
-        return jsonify({
-            "reply":"अन्य जानकारी लिखें"
-        })
-
-    elif session["step"] == "seller_other":
-
-        session["other"] = message
-        session["step"] = "seller_location"
-
-        return jsonify({
-            "reply":"लोकेशन दर्ज करें"
-        })
-
-    elif session["step"] == "seller_location":
-
-        session["location"] = message
-        session["step"] = "seller_whatsapp"
-
-        return jsonify({
-            "reply":"WhatsApp नंबर दर्ज करें"
-        })
-
-    elif session["step"] == "seller_whatsapp":
-
-        session["whatsapp"] = message
-
-        save_data(session)
-
-        sessions.pop(user_id)
-
-        return jsonify({
-            "reply":"धन्यवाद 🙏\\n\\nSeller Registration सफल हुआ।"
-        })
-
-    return jsonify({
-        "reply":"कुछ त्रुटि हुई है"
-    })
-
-# --------------------------
-# Run
-# --------------------------
+                    rows.append({
+                        "id": key,
+                        "title": val["title"]
+                    })
+
+                send_msg({
+                    "messaging_product": "whatsapp",
+                    "to": sender,
+                    "type": "interactive",
+                    "interactive": {
+                        "type": "list",
+                        "header": {
+                            "type": "text",
+                            "text": "श्रेणियाँ"
+                        },
+                        "body": {
+                            "text": "कृपया श्रेणी चुनें"
+                        },
+                        "action": {
+                            "button": "श्रेणी चुनें",
+                            "sections": [
+                                {
+                                    "title": "Near Me Marketplace",
+                                    "rows": rows
+                                }
+                            ]
+                        }
+                    }
+                })
+
+            # -----------------------------------
+            # LOCATION RECEIVED
+            # -----------------------------------
+
+            elif "location" in msg and \
+            user_sessions.get(sender, {}).get("step") == "location":
+
+                user_sessions[sender]["location"] = msg["location"]
+
+                user_sessions[sender]["step"] = "category"
+
+                rows = []
+
+                for key, val in categories.items():
+
+                    rows.append({
+                        "id": key,
+                        "title": val["title"]
+                    })
+
+                send_msg({
+                    "messaging_product": "whatsapp",
+                    "to": sender,
+                    "type": "interactive",
+                    "interactive": {
+                        "type": "list",
+                        "header": {
+                            "type": "text",
+                            "text": "श्रेणियाँ"
+                        },
+                        "body": {
+                            "text": "कृपया श्रेणी चुनें"
+                        },
+                        "action": {
+                            "button": "श्रेणी चुनें",
+                            "sections": [
+                                {
+                                    "title": "Near Me Marketplace",
+                                    "rows": rows
+                                }
+                            ]
+                        }
+                    }
+                })
+
+            # -----------------------------------
+            # CATEGORY SELECT
+            # -----------------------------------
+
+            elif "interactive" in msg and \
+            "list_reply" in msg["interactive"]:
+
+                selected = msg["interactive"]["list_reply"]["id"]
+
+                session = user_sessions.get(sender, {})
+
+                # CATEGORY
+
+                if session.get("step") == "category":
+
+                    session["category"] = selected
+
+                    session["step"] = "subcategory"
+
+                    buttons = []
+
+                    for sub in categories[selected]["subs"]:
+
+                        buttons.append({
+                            "type": "reply",
+                            "reply": {
+                                "id": sub,
+                                "title": sub[:20]
+                            }
+                        })
+
+                    send_msg({
+                        "messaging_product": "whatsapp",
+                        "to": sender,
+                        "type": "interactive",
+                        "interactive": {
+                            "type": "button",
+                            "body": {
+                                "text":
+                                "उप-श्रेणी चुनें"
+                            },
+                            "action": {
+                                "buttons": buttons[:3]
+                            }
+                        }
+                    })
+
+            # -----------------------------------
+            # SUBCATEGORY SELECT
+            # -----------------------------------
+
+            elif "interactive" in msg and \
+            "button_reply" in msg["interactive"] and \
+            user_sessions.get(sender, {}).get("step") == "subcategory":
+
+                sub = msg["interactive"]["button_reply"]["id"]
+
+                user_sessions[sender]["subcategory"] = sub
+
+                user_sessions[sender]["step"] = "other"
+
+                send_msg({
+                    "messaging_product": "whatsapp",
+                    "to": sender,
+                    "type": "text",
+                    "text": {
+                        "body":
+                        "यदि अन्य जानकारी देना चाहते हैं तो लिखें"
+                    }
+                })
+
+            # -----------------------------------
+            # OTHER INFO
+            # -----------------------------------
+
+            elif "text" in msg and \
+            user_sessions.get(sender, {}).get("step") == "other":
+
+                user_sessions[sender]["other"] = msg["text"]["body"]
+
+                user_sessions[sender]["step"] = "whatsapp"
+
+                send_msg({
+                    "messaging_product": "whatsapp",
+                    "to": sender,
+                    "type": "text",
+                    "text": {
+                        "body":
+                        "कृपया अपना WhatsApp नंबर दर्ज करें"
+                    }
+                })
+
+            # -----------------------------------
+            # FINAL SUBMIT
+            # -----------------------------------
+
+            elif "text" in msg and \
+            user_sessions.get(sender, {}).get("step") == "whatsapp":
+
+                user_sessions[sender]["whatsapp"] = msg["text"]["body"]
+
+                print("USER DATA =", user_sessions[sender])
+
+                send_msg({
+                    "messaging_product": "whatsapp",
+                    "to": sender,
+                    "type": "text",
+                    "text": {
+                        "body":
+                        "धन्यवाद 🙏\n\nआपकी जानकारी सफलतापूर्वक दर्ज कर ली गई है।\n\nहमारी टीम जल्द ही आपसे संपर्क करेगी।"
+                    }
+                })
+
+                del user_sessions[sender]
+
+    except Exception as e:
+
+        print("ERROR =", e)
+
+    return "OK", 200
+
+# -----------------------------------
+# RUN SERVER
+# -----------------------------------
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+
+    port = int(os.environ.get("PORT", 8080))
+
+    app.run(host="0.0.0.0", port=port)
