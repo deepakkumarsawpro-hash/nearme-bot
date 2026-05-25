@@ -1,10 +1,11 @@
 import os
 import requests
-from flask import Flask, request
+from flask import Flask, request, render_template_string
 import psycopg
 import redis
 import json
 import math
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -22,25 +23,18 @@ def get_redis():
 # HELPER: FORMAT PHONE NUMBER
 # =====================================================
 def format_phone(phone):
-    # Remove spaces, +, -
     phone = str(phone).replace(" ", "").replace("+", "").replace("-", "")
-
-    # Agar 10 digit hai to 91 add karo
     if len(phone) == 10 and phone.isdigit():
         return "91" + phone
-
-    # Agar already 91 se start hai to waise hi return karo
     if len(phone) == 12 and phone.startswith("91"):
         return phone
-
-    # Warna jo hai wahi bhej do
     return phone
 
 # =====================================================
 # HELPER: CALCULATE DISTANCE
 # =====================================================
 def haversine_distance(lat1, lon1, lat2, lon2):
-    R = 6371 # Earth radius in KM
+    R = 6371
     dLat = math.radians(lat2 - lat1)
     dLon = math.radians(lon2 - lon1)
     a = math.sin(dLat/2) * math.sin(dLat/2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon/2) * math.sin(dLon/2)
@@ -60,81 +54,13 @@ VERIFY_TOKEN = "my_secret_token_123"
 # =====================================================
 
 categories = {
-    "construction": {
-        "title": "Construction",
-        "subs": {
-            "Mason": "नींव, ईंट जुड़ाई, प्लास्टर, टाइल्स",
-            "Architect": "नक्शा, इंटीरियर डिजाइन, 3D व्यू",
-            "Plumber": "पाइप लीकेज, मोटर, टैप फिटिंग",
-            "Electrician": "वायरिंग, शॉर्ट-सर्किट, इनवर्टर, बोर्ड रिपेयर",
-            "Carpenter": "दरवाजा, खिड़की, बेड/अलमारी फर्नीचर",
-            "Paint & Hardware": "वॉल पुट्टी, पेंटिंग, हार्डवेयर सामान"
-        }
-    },
-    "automotive": {
-        "title": "Automotive",
-        "subs": {
-            "Mechanic": "इंजन रिपेयर, सर्विसिंग, ब्रेक, क्लच",
-            "Denting/Painting": "डेंट हटाना, पेंटिंग, पॉलिशिंग",
-            "Spare Parts": "ओरिजिनल पार्ट्स, लुब्रिकेंट्स",
-            "Washing": "फोम वॉश, इंटरनल क्लीनिंग, वैक्सिंग",
-            "Batteries": "बैटरी बदलना, चार्जिंग"
-        }
-    },
-    "food": {
-        "title": "Food",
-        "subs": {
-            "Restaurants": "वेज, नॉन-वेज, थाली, पार्सल",
-            "Tiffin": "मंथली मेस, होम मेड खाना",
-            "Fast Food": "पिज्जा, बर्गर, मोमोज, चाउमीन",
-            "Sweets/Bakery": "केक, मिठाई",
-            "Catering": "शादी/पार्टी ऑर्डर",
-            "Grocery": "दैनिक राशन सामग्री"
-        }
-    },
-    "retail": {
-        "title": "Retail",
-        "subs": {
-            "Clothing": "मेंस, वुमेंस, किड्स वियर",
-            "Electronics": "टीवी, फ्रिज, वाशिंग मशीन",
-            "Pharmacy": "दवाइयां, स्वास्थ्य सप्लीमेंट",
-            "Footwear": "जूते, चप्पल",
-            "Stationery": "कॉपी, किताब, ऑफिस सामान",
-            "Mobile/Laptop": "स्क्रीन रिपेयर, बैटरी, चार्जर"
-        }
-    },
-    "healthcare": {
-        "title": "Healthcare",
-        "subs": {
-            "Doctor": "जनरल फिजिशियन, स्पेशलिस्ट",
-            "Clinic": "क्लिनिक सेवाएं",
-            "Diagnostic Lab": "ब्लड टेस्ट, एक्स-रे",
-            "Medical Store": "दवाइयां",
-            "Physiotherapy": "फिजियोथेरेपी सेवाएं",
-            "Ambulance": "24/7 इमरजेंसी"
-        }
-    },
-    "personal": {
-        "title": "Personal Services",
-        "subs": {
-            "Salon": "हेयर कट, फेशियल",
-            "Laundry": "ड्राई क्लीनिंग, प्रेस",
-            "Tailoring": "सिलाई सेवाएं",
-            "Cleaning": "सोफा/कारपेट क्लीनिंग",
-            "Pest Control": "दीमक, कॉकरोच",
-            "Courier": "डिलीवरी सेवाएं"
-        }
-    },
-    "agriculture": {
-        "title": "Agriculture",
-        "subs": {
-            "Seeds/Fertilizer": "बीज, खाद, कीटनाशक",
-            "Farm Equipment": "थ्रेशर, कल्टीवेटर",
-            "Tractor Service": "इंजन, टायर रिपेयर",
-            "Irrigation": "पंप सेट, पाइप",
-            "Veterinary": "पशु चिकित्सा"
-        }
-    }
+    "construction": {"title": "Construction", "subs": {"Mason": "नींव, ईंट जुड़ाई, प्लास्टर, टाइल्स", "Architect": "नक्शा, इंटीरियर डिजाइन, 3D व्यू", "Plumber": "पाइप लीकेज, मोटर, टैप फिटिंग", "Electrician": "वायरिंग, शॉर्ट-सर्किट, इनवर्टर, बोर्ड रिपेयर", "Carpenter": "दरवाजा, खिड़की, बेड/अलमारी फर्नीचर", "Paint & Hardware": "वॉल पुट्टी, पेंटिंग, हार्डवेयर सामान"}},
+    "automotive": {"title": "Automotive", "subs": {"Mechanic": "इंजन रिपेयर, सर्विसिंग, ब्रेक, क्लच", "Denting/Painting": "डेंट हटाना, पेंटिंग, पॉलिशिंग", "Spare Parts": "ओरिजिनल पार्ट्स, लुब्रिकेंट्स", "Washing": "फोम वॉश, इंटरनल क्लीनिंग, वैक्सिंग", "Batteries": "बैटरी बदलना, चार्जिंग"}},
+    "food": {"title": "Food", "subs": {"Restaurants": "वेज, नॉन-वेज, थाली, पार्सल", "Tiffin": "मंथली मेस, होम मेड खाना", "Fast Food": "पिज्जा, बर्गर, मोमोज, चाउमीन", "Sweets/Bakery": "केक, मिठाई", "Catering": "शादी/पार्टी ऑर्डर", "Grocery": "दैनिक राशन सामग्री"}},
+    "retail": {"title": "Retail", "subs": {"Clothing": "मेंस, वुमेंस, किड्स वियर", "Electronics": "टीवी, फ्रिज, वाशिंग मशीन", "Pharmacy": "दवाइयां, स्वास्थ्य सप्लीमेंट", "Footwear": "जूते, चप्पल", "Stationery": "कॉपी, किताब, ऑफिस सामान", "Mobile/Laptop": "स्क्रीन रिपेयर, बैटरी, चार्जर"}},
+    "healthcare": {"title": "Healthcare", "subs": {"Doctor": "जनरल फिजिशियन, स्पेशलिस्ट", "Clinic": "क्लिनिक सेवाएं", "Diagnostic Lab": "ब्लड टेस्ट, एक्स-रे", "Medical Store": "दवाइयां", "Physiotherapy": "फिजियोथेरेपी सेवाएं", "Ambulance": "24/7 इमरजेंसी"}},
+    "personal": {"title": "Personal Services", "subs": {"Salon": "हेयर कट, फेशियल", "Laundry": "ड्राई क्लीनिंग, प्रेस", "Tailoring": "सिलाई सेवाएं", "Cleaning": "सोफा/कारपेट क्लीनिंग", "Pest Control": "दीमक, कॉकरोच", "Courier": "डिलीवरी सेवाएं"}},
+    "agriculture": {"title": "Agriculture", "subs": {"Seeds/Fertilizer": "बीज, खाद, कीटनाशक", "Farm Equipment": "थ्रेशर, कल्टीवेटर", "Tractor Service": "इंजन, टायर रिपेयर", "Irrigation": "पंप सेट, पाइप", "Veterinary": "पशु चिकित्सा"}}
 }
 
 # =====================================================
@@ -143,102 +69,38 @@ categories = {
 
 def send(payload):
     url = f"https://graph.facebook.com/v21.0/{PHONE_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
     try:
         requests.post(url, json=payload, headers=headers)
     except Exception as e:
         print(f"Send Error: {e}")
 
-# =====================================================
-# SEND TEXT
-# =====================================================
-
 def send_text(to, text):
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "text",
-        "text": {"body": text}
-    }
-    send(payload)
-
-# =====================================================
-# SEND IMAGE WITH CAPTION
-# =====================================================
+    send({"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": text}})
 
 def send_image(to, image_id, caption):
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "image",
-        "image": {
-            "id": image_id,
-            "caption": caption
-        }
-    }
-    send(payload)
-
-# =====================================================
-# SEND BUTTONS
-# =====================================================
+    send({"messaging_product": "whatsapp", "to": to, "type": "image", "image": {"id": image_id, "caption": caption}})
 
 def send_buttons(to, text, buttons):
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "interactive",
-        "interactive": {
-            "type": "button",
-            "body": {"text": text},
-            "action": {"buttons": buttons}
-        }
-    }
-    send(payload)
-
-# =====================================================
-# SEND CATEGORY LIST
-# =====================================================
+    send({"messaging_product": "whatsapp", "to": to, "type": "interactive", "interactive": {"type": "button", "body": {"text": text}, "action": {"buttons": buttons}}})
 
 def send_category_list(to):
-    rows = []
-    for key, value in categories.items():
-        rows.append({"id": key, "title": value["title"]})
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "interactive",
-        "interactive": {
-            "type": "list",
-            "header": {"type": "text", "text": "Near Me Marketplace"},
-            "body": {"text": "📂 कृपया Category चुनें"},
-            "action": {
-                "button": "Open Categories",
-                "sections": [{"title": "Categories", "rows": rows}]
-            }
-        }
-    }
-    send(payload)
+    rows = [{"id": key, "title": value["title"]} for key, value in categories.items()]
+    send({"messaging_product": "whatsapp", "to": to, "type": "interactive", "interactive": {"type": "list", "header": {"type": "text", "text": "Near Me Marketplace"}, "body": {"text": "📂 कृपया Category चुनें"}, "action": {"button": "Open Categories", "sections": [{"title": "Categories", "rows": rows}]}}})
 
 # =====================================================
-# AUTO MATCHING FUNCTION
+# AUTO MATCHING FUNCTION - LIMIT 10 SELLERS
 # =====================================================
-def find_and_notify_sellers(customer_data):
+def find_and_notify_sellers(customer_data, customer_lead_id):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Customer ki details
         cust_lat = customer_data["location"]["latitude"]
         cust_lon = customer_data["location"]["longitude"]
         cust_category = customer_data["category"]
         cust_subcategory = customer_data["subcategory"]
-        max_distance = int(customer_data["distance"].split()[0]) # "5 KM" se 5 nikalo
-
-        # Requirement text
+        max_distance = int(customer_data["distance"].split()[0])
         req_text = customer_data.get("requirement_text") or customer_data.get("requirement_caption", "No text")
         cust_phone = customer_data.get("whatsapp", "Not provided")
         req_image_id = customer_data.get("requirement_image")
@@ -249,40 +111,117 @@ def find_and_notify_sellers(customer_data):
             WHERE data->>'role' = 'seller'
             AND data->>'category' = %s
             AND data->>'subcategory' = %s
+            ORDER BY created_at DESC
         """, (cust_category, cust_subcategory))
 
         sellers = cur.fetchall()
-        matched_count = 0
+        matched_sellers = []
 
+        # Distance calculate karke sort karo
         for seller_phone, seller_data_json in sellers:
             seller_data = seller_data_json
             seller_lat = seller_data["location"]["latitude"]
             seller_lon = seller_data["location"]["longitude"]
-
             distance = haversine_distance(cust_lat, cust_lon, seller_lat, seller_lon)
 
             if distance <= max_distance:
-                matched_count += 1
-                shop_name = seller_data.get("shop_name", "Seller")
+                matched_sellers.append({
+                    "phone": seller_phone,
+                    "data": seller_data,
+                    "distance": distance
+                })
 
-                # Seller ka number format karo
-                seller_phone_formatted = format_phone(seller_phone)
+        # Distance ke hisaab se sort karo aur top 10 lo
+        matched_sellers.sort(key=lambda x: x["distance"])
+        matched_sellers = matched_sellers[:10] # LIMIT 10 SELLERS
 
-                # Seller ko message bhejo
-                msg = f"🔔 *New Customer Lead* 🔔\n\n👤 *Customer*: +{cust_phone}\n📍 *Distance*: {distance:.1f} KM away\n🏪 *Shop*: {shop_name}\n📂 *Category*: {categories[cust_category]['title']} > {cust_subcategory}\n📝 *Requirement*: {req_text}\n\nJaldi contact karein!"
+        for seller in matched_sellers:
+            seller_phone_formatted = format_phone(seller["phone"])
+            shop_name = seller["data"].get("shop_name", "Seller")
+            distance = seller["distance"]
 
-                if req_image_id:
-                    send_image(seller_phone_formatted, req_image_id, msg)
-                else:
-                    send_text(seller_phone_formatted, msg)
+            # Seller ko message + Interested button bhejo
+            msg = f"🔔 *New Customer Lead* 🔔\n\n👤 *Customer*: +{cust_phone}\n📍 *Distance*: {distance:.1f} KM away\n🏪 *Shop*: {shop_name}\n📂 *Category*: {categories[cust_category]['title']} > {cust_subcategory}\n📝 *Requirement*: {req_text}\n\n*Lead ID*: {customer_lead_id}"
+
+            buttons = [
+                {"type": "reply", "reply": {"id": f"interested_{customer_lead_id}", "title": "✅ Interested"}}
+            ]
+
+            if req_image_id:
+                send_image(seller_phone_formatted, req_image_id, msg)
+                send_buttons(seller_phone_formatted, "Kya aap is customer se connect karna chahte hain?", buttons)
+            else:
+                send_buttons(seller_phone_formatted, msg, buttons)
 
         cur.close()
         conn.close()
-        return matched_count
+        return len(matched_sellers)
 
     except Exception as e:
         print(f"Matching Error: {e}")
         return 0
+
+# =====================================================
+# ADMIN DASHBOARD
+# =====================================================
+@app.route("/admin")
+def admin():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, phone, data, created_at FROM leads ORDER BY created_at DESC LIMIT 100")
+        leads = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        html_template = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Near Me Marketplace - Admin</title>
+            <style>
+                body { font-family: Arial; margin: 20px; background: #f5f5f5; }
+                h1 { color: #333; }
+                table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+                th { background: #4CAF50; color: white; }
+                tr:hover { background: #f1f1f1; }
+               .badge { padding: 4px 8px; border-radius: 4px; color: white; font-size: 12px; }
+               .customer { background: #2196F3; }
+               .seller { background: #FF9800; }
+            </style>
+        </head>
+        <body>
+            <h1>📊 Near Me Marketplace - Leads Dashboard</h1>
+            <p>Total Leads: {{ leads|length }}</p>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Role</th>
+                    <th>Phone</th>
+                    <th>Category</th>
+                    <th>Location</th>
+                    <th>Requirement</th>
+                    <th>Date</th>
+                </tr>
+                {% for lead in leads %}
+                <tr>
+                    <td>{{ lead[0] }}</td>
+                    <td><span class="badge {{ lead[2]['role'] }}">{{ lead[2]['role'].title() }}</span></td>
+                    <td>+{{ lead[1] }}</td>
+                    <td>{{ lead[2].get('category', '-') }} > {{ lead[2].get('subcategory', '-') }}</td>
+                    <td>{{ lead[2]['location']['latitude'] }}, {{ lead[2]['location']['longitude'] }}</td>
+                    <td>{{ lead[2].get('requirement_text', lead[2].get('requirement_caption', '-'))[:50] }}...</td>
+                    <td>{{ lead[3].strftime('%d-%m-%Y %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </body>
+        </html>
+        """
+        return render_template_string(html_template, leads=leads)
+    except Exception as e:
+        return f"Error: {e}"
 
 # =====================================================
 # DB CHECK ROUTE
@@ -295,7 +234,6 @@ def db_check():
         cur.execute('SELECT 1;')
         cur.close()
         conn.close()
-
         r = get_redis()
         r.ping()
         return "Database + Redis Connected ✅"
@@ -337,20 +275,14 @@ def webhook():
         if not session_data:
             session = {"step": "role"}
             r.set(f"session:{sender}", json.dumps(session))
-            buttons = [
-                {"type": "reply", "reply": {"id": "customer", "title": "Customer"}},
-                {"type": "reply", "reply": {"id": "seller", "title": "Seller"}}
-            ]
+            buttons = [{"type": "reply", "reply": {"id": "customer", "title": "Customer"}}, {"type": "reply", "reply": {"id": "seller", "title": "Seller"}}]
             send_buttons(sender, "🙏 Welcome to Near Me Marketplace\n\nकृपया अपना रोल चुनें:", buttons)
             return "OK", 200
 
         session = json.loads(session_data)
 
         if "text" in msg and session["step"] == "role":
-            buttons = [
-                {"type": "reply", "reply": {"id": "customer", "title": "Customer"}},
-                {"type": "reply", "reply": {"id": "seller", "title": "Seller"}}
-            ]
+            buttons = [{"type": "reply", "reply": {"id": "customer", "title": "Customer"}}, {"type": "reply", "reply": {"id": "seller", "title": "Seller"}}]
             send_buttons(sender, "🙏 Welcome to Near Me Marketplace\n\nकृपया अपना रोल चुनें:", buttons)
             return "OK", 200
 
@@ -358,15 +290,33 @@ def webhook():
             interactive = msg["interactive"]
             if interactive["type"] == "button_reply":
                 button_id = interactive["button_reply"]["id"]
+
+                # SELLER INTERESTED BUTTON
+                if button_id.startswith("interested_"):
+                    lead_id = button_id.split("_")[1]
+                    conn = get_db_connection()
+                    cur = conn.cursor()
+                    cur.execute("SELECT phone, data FROM leads WHERE id = %s", (lead_id,))
+                    result = cur.fetchone()
+                    cur.close()
+                    conn.close()
+
+                    if result:
+                        customer_phone, customer_data = result
+                        seller_data = json.loads(session_data) if session_data else {}
+                        seller_shop = seller_data.get("shop_name", "Ek Seller")
+
+                        # Customer ko notify karo
+                        send_text(format_phone(customer_phone), f"🎉 Good News!\n\n*{seller_shop}* aapki requirement me interested hai.\n\nSeller aapse jaldi contact karega: +{sender}")
+                        # Seller ko confirm karo
+                        send_text(sender, "✅ Done! Customer ko aapka contact bhej diya gaya hai. Jaldi call karke deal close karein.")
+                    return "OK", 200
+
                 if session["step"] == "role":
                     session["role"] = button_id
                     if button_id == "customer":
                         session["step"] = "distance"
-                        buttons = [
-                            {"type": "reply", "reply": {"id": "1 KM", "title": "1 KM"}},
-                            {"type": "reply", "reply": {"id": "5 KM", "title": "5 KM"}},
-                            {"type": "reply", "reply": {"id": "10 KM", "title": "10 KM"}}
-                        ]
+                        buttons = [{"type": "reply", "reply": {"id": "1 KM", "title": "1 KM"}}, {"type": "reply", "reply": {"id": "5 KM", "title": "5 KM"}}, {"type": "reply", "reply": {"id": "10 KM", "title": "10 KM"}}]
                         send_buttons(sender, "📍 कितनी दूरी में सेवा चाहिए?", buttons)
                     else:
                         session["step"] = "shop_name"
@@ -416,29 +366,24 @@ def webhook():
                 send_text(sender, "📱 अब अपना WhatsApp नंबर लिखें")
 
             elif session["step"] == "whatsapp":
-                session["whatsapp"] = format_phone(text) # Auto 91 add ho jayega
+                session["whatsapp"] = format_phone(text)
                 print("FINAL USER DATA =", session)
 
                 try:
                     conn = get_db_connection()
                     cur = conn.cursor()
-                    cur.execute(
-                        "CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, phone VARCHAR(20), data JSONB, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-                    )
-                    cur.execute(
-                        "INSERT INTO leads (phone, data) VALUES (%s, %s)",
-                        (sender, json.dumps(session))
-                    )
+                    cur.execute("CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, phone VARCHAR(20), data JSONB, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+                    cur.execute("INSERT INTO leads (phone, data) VALUES (%s, %s) RETURNING id", (sender, json.dumps(session)))
+                    lead_id = cur.fetchone()[0]
                     conn.commit()
                     cur.close()
                     conn.close()
 
-                    # AUTO MATCHING TRIGGER
                     if session["role"] == "customer":
-                        matched = find_and_notify_sellers(session)
-                        send_text(sender, f"✅ धन्यवाद 🙏\n\nआपकी जानकारी सफलतापूर्वक दर्ज हो गई है।\n\n📢 {matched} नजदीकी दुकानदारों को आपकी requirement भेज दी गई है।\n\nहमारी टीम जल्द ही आपसे संपर्क करेगी.")
+                        matched = find_and_notify_sellers(session, lead_id)
+                        send_text(sender, f"✅ धन्यवाद 🙏\n\nआपकी जानकारी सफलतापूर्वक दर्ज हो गई है।\n\n📢 {matched} नजदीकी दुकानदारों को आपकी requirement भेज दी गई है।\n\n*Lead ID: {lead_id}*\n\nJab koi seller interested hoga to aapko turant notification milega.")
                     else:
-                        send_text(sender, "✅ धन्यवाद 🙏\n\nआपकी दुकान सफलतापूर्वक रजिस्टर हो गई है।\n\nअब आपके area के Customer की requirement सीधे आपके WhatsApp पर आएगी.")
+                        send_text(sender, "✅ धन्यवाद 🙏\n\nआपकी दुकान सफलतापूर्वक रजिस्टर हो गई है।\n\nAb aapke area ke Customer ki requirement seedhe aapke WhatsApp par aayegi 'Interested' button ke saath.")
 
                 except Exception as db_error:
                     print(f"DB Save Error: {db_error}")
