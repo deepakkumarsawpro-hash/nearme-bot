@@ -520,7 +520,11 @@ def webhook():
 
                         sender,
 
-                        "📝 अपनी पूरी जरूरत / requirement लिखिए"
+                        "📝 अपनी पूरी जरूरत / requirement लिखें\n\n"
+                        "या संबंधित फोटो भेजें।\n\n"
+                        "✅ Text लिख सकते हैं\n"
+                        "✅ Photo भेज सकते हैं\n"
+                        "✅ Photo + Text दोनों भेज सकते हैं"
                     )
 
             # =============================================
@@ -530,8 +534,6 @@ def webhook():
             elif interactive["type"] == "list_reply":
 
                 row_id = interactive["list_reply"]["id"]
-
-                # CATEGORY
 
                 if session["step"] == "category":
 
@@ -570,8 +572,6 @@ def webhook():
 
         elif "location" in msg:
 
-            # CUSTOMER LOCATION
-
             if session["step"] == "location":
 
                 session["location"] = msg["location"]
@@ -579,8 +579,6 @@ def webhook():
                 session["step"] = "category"
 
                 send_category_list(sender)
-
-            # SELLER LOCATION
 
             elif session["step"] == "seller_location":
 
@@ -598,7 +596,7 @@ def webhook():
 
             text = msg["text"]["body"]
 
-            # SELLER SHOP NAME
+            # SHOP NAME
 
             if session["step"] == "shop_name":
 
@@ -615,46 +613,18 @@ def webhook():
 
             # REQUIREMENT TEXT
 
-elif session["step"] == "requirement":
+            elif session["step"] == "requirement":
 
-    session["requirement_text"] = text
+                session["requirement_text"] = text
 
-    session["step"] = "whatsapp"
+                session["step"] = "whatsapp"
 
-    send_text(
+                send_text(
 
-        sender,
+                    sender,
 
-        "📱 अब अपना WhatsApp नंबर लिखें"
-    )
-
-# =================================================
-# IMAGE MESSAGE
-# =================================================
-
-elif "image" in msg:
-
-    if session["step"] == "requirement":
-
-        session["requirement_image"] = \
-        msg["image"]["id"]
-
-        # IMAGE CAPTION
-
-        if "caption" in msg["image"]:
-
-            session["requirement_caption"] = \
-            msg["image"]["caption"]
-
-        session["step"] = "whatsapp"
-
-        send_text(
-
-            sender,
-
-            "🖼 आपकी फोटो / requirement प्राप्त हो गई।\n\n"
-            "📱 अब अपना WhatsApp नंबर लिखें"
-        )
+                    "📱 अब अपना WhatsApp नंबर लिखें"
+                )
 
             # WHATSAPP
 
@@ -675,6 +645,32 @@ elif "image" in msg:
                 )
 
                 del user_sessions[sender]
+
+        # =================================================
+        # IMAGE MESSAGE
+        # =================================================
+
+        elif "image" in msg:
+
+            if session["step"] == "requirement":
+
+                session["requirement_image"] = \
+                msg["image"]["id"]
+
+                if "caption" in msg["image"]:
+
+                    session["requirement_caption"] = \
+                    msg["image"]["caption"]
+
+                session["step"] = "whatsapp"
+
+                send_text(
+
+                    sender,
+
+                    "🖼 आपकी फोटो / requirement प्राप्त हो गई।\n\n"
+                    "📱 अब अपना WhatsApp नंबर लिखें"
+                )
 
         return "OK", 200
 
@@ -705,4 +701,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=port
-                )
+    )
