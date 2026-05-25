@@ -4,62 +4,83 @@ import requests
 
 app = Flask(__name__)
 
-# -----------------------------------
-# WHATSAPP API CONFIG
-# -----------------------------------
+# =====================================================
+# WHATSAPP CONFIG
+# =====================================================
 
-PHONE_ID = "1060745180462931"
+PHONE_ID = "YOUR_PHONE_NUMBER_ID"
 
-TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHhfnbqaWVfcvZA8VqXfY4vm2SmZBBhuU7PpUHbZCCJRTpugaLqdPcbs4moBPtpqxtaOmYtOZCZBPdd1TYIeNLLczx9svvHOazqCy5ah3UHCiGrC169ZBNlk61JOsWO1XVtsgZDZD"
+TOKEN = "YOUR_PERMANENT_TOKEN"
 
-VERIFY_TOKEN = "my_secret_token_123"
+VERIFY_TOKEN = "nearmeverify"
 
-# -----------------------------------
+# =====================================================
 # USER SESSIONS
-# -----------------------------------
+# =====================================================
 
 user_sessions = {}
 
-# -----------------------------------
+# =====================================================
 # CATEGORY DATA
-# -----------------------------------
+# =====================================================
 
 categories = {
     "construction": {
         "title": "निर्माण",
-        "subs": ["मिस्त्री", "प्लंबर"]
+        "subs": [
+            "मिस्त्री",
+            "प्लंबर"
+        ]
     },
+
     "auto": {
         "title": "ऑटो",
-        "subs": ["मैकेनिक"]
+        "subs": [
+            "मैकेनिक"
+        ]
     },
+
     "food": {
         "title": "भोजन",
-        "subs": ["रेस्टोरेंट"]
+        "subs": [
+            "रेस्टोरेंट"
+        ]
     },
+
     "retail": {
         "title": "खुदरा",
-        "subs": ["किराना"]
+        "subs": [
+            "किराना"
+        ]
     },
+
     "health": {
         "title": "स्वास्थ्य",
-        "subs": ["डॉक्टर"]
+        "subs": [
+            "डॉक्टर"
+        ]
     },
+
     "personal": {
         "title": "व्यक्तिगत",
-        "subs": ["सैलून"]
+        "subs": [
+            "सैलून"
+        ]
     },
+
     "agriculture": {
         "title": "कृषि",
-        "subs": ["बीज"]
+        "subs": [
+            "बीज"
+        ]
     }
 }
 
-# -----------------------------------
-# SEND MESSAGE FUNCTION
-# -----------------------------------
+# =====================================================
+# SEND MESSAGE
+# =====================================================
 
-def send_msg(payload):
+def send_message(payload):
 
     url = f"https://graph.facebook.com/v21.0/{PHONE_ID}/messages"
 
@@ -68,30 +89,120 @@ def send_msg(payload):
         "Content-Type": "application/json"
     }
 
-    requests.post(url, json=payload, headers=headers)
+    response = requests.post(
+        url,
+        json=payload,
+        headers=headers
+    )
 
-# -----------------------------------
-# WEBHOOK VERIFY
-# -----------------------------------
+    print(response.text)
+
+# =====================================================
+# SIMPLE TEXT
+# =====================================================
+
+def send_text(to, text):
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {
+            "body": text
+        }
+    }
+
+    send_message(payload)
+
+# =====================================================
+# BUTTON MESSAGE
+# =====================================================
+
+def send_buttons(to, text, buttons):
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {
+                "text": text
+            },
+            "action": {
+                "buttons": buttons
+            }
+        }
+    }
+
+    send_message(payload)
+
+# =====================================================
+# LIST MESSAGE
+# =====================================================
+
+def send_list(to, body_text, rows):
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+
+            "header": {
+                "type": "text",
+                "text": "Near Me Marketplace"
+            },
+
+            "body": {
+                "text": body_text
+            },
+
+            "footer": {
+                "text": "कृपया विकल्प चुनें"
+            },
+
+            "action": {
+                "button": "Open List",
+
+                "sections": [
+                    {
+                        "title": "Available Options",
+                        "rows": rows
+                    }
+                ]
+            }
+        }
+    }
+
+    send_message(payload)
+
+# =====================================================
+# VERIFY WEBHOOK
+# =====================================================
 
 @app.route("/webhook", methods=["GET"])
 
 def verify():
 
     mode = request.args.get("hub.mode")
+
     token = request.args.get("hub.verify_token")
+
     challenge = request.args.get("hub.challenge")
 
     if mode and token:
 
         if mode == "subscribe" and token == VERIFY_TOKEN:
+
             return challenge, 200
 
     return "Verification failed", 403
 
-# -----------------------------------
+# =====================================================
 # MAIN WEBHOOK
-# -----------------------------------
+# =====================================================
 
 @app.route("/webhook", methods=["POST"])
 
@@ -103,16 +214,22 @@ def webhook():
 
         if "entry" in data:
 
-            msg = data["entry"][0]["changes"][0]["value"].get("messages", [{}])[0]
+            changes = data["entry"][0]["changes"][0]
 
-            sender = msg.get("from")
+            value = changes["value"]
 
-            if not sender:
+            messages = value.get("messages")
+
+            if not messages:
                 return "OK", 200
 
-            # -----------------------------------
-            # START MESSAGE
-            # -----------------------------------
+            msg = messages[0]
+
+            sender = msg["from"]
+
+            # =====================================================
+            # START BOT
+            # =====================================================
 
             if "text" in msg:
 
@@ -124,311 +241,280 @@ def webhook():
                         "step": "role"
                     }
 
-                    send_msg({
-                        "messaging_product": "whatsapp",
-                        "to": sender,
-                        "type": "interactive",
-                        "interactive": {
-                            "type": "button",
-                            "body": {
-                                "text":
-                                "नमस्ते 🙏\n\nNear Me Marketplace में आपका स्वागत है।\n\nकृपया अपना रोल चुनें:"
-                            },
-                            "action": {
-                                "buttons": [
-                                    {
-                                        "type": "reply",
-                                        "reply": {
-                                            "id": "customer",
-                                            "title": "ग्राहक"
-                                        }
-                                    },
-                                    {
-                                        "type": "reply",
-                                        "reply": {
-                                            "id": "seller",
-                                            "title": "सेवा प्रदाता"
-                                        }
-                                    }
-                                ]
+                    buttons = [
+
+                        {
+                            "type": "reply",
+                            "reply": {
+                                "id": "customer",
+                                "title": "ग्राहक"
+                            }
+                        },
+
+                        {
+                            "type": "reply",
+                            "reply": {
+                                "id": "seller",
+                                "title": "सेवा प्रदाता"
                             }
                         }
-                    })
+                    ]
 
-            # -----------------------------------
-            # ROLE SELECT
-            # -----------------------------------
+                    send_buttons(
+                        sender,
 
-            elif "interactive" in msg and \
-            "button_reply" in msg["interactive"]:
+                        "🙏 नमस्ते\n\n"
+                        "Near Me Marketplace में आपका स्वागत है।\n\n"
+                        "कृपया अपना रोल चुनें:",
 
-                reply_id = msg["interactive"]["button_reply"]["id"]
+                        buttons
+                    )
 
-                session = user_sessions.get(sender, {})
+                    return "OK", 200
 
-                # CUSTOMER / SELLER
+            # =====================================================
+            # BUTTON CLICK
+            # =====================================================
 
-                if session.get("step") == "role":
+            if "interactive" in msg:
 
-                    session["role"] = reply_id
+                interactive = msg["interactive"]
 
-                    # CUSTOMER FLOW
+                # =====================================================
+                # BUTTON REPLY
+                # =====================================================
 
-                    if reply_id == "customer":
+                if interactive["type"] == "button_reply":
+
+                    button_id = interactive["button_reply"]["id"]
+
+                    session = user_sessions.get(sender, {})
+
+                    # =====================================================
+                    # ROLE SELECT
+                    # =====================================================
+
+                    if session.get("step") == "role":
+
+                        session["role"] = button_id
 
                         session["step"] = "distance"
 
-                        send_msg({
-                            "messaging_product": "whatsapp",
-                            "to": sender,
-                            "type": "text",
-                            "text": {
-                                "body":
-                                "कृपया दूरी दर्ज करें।\n\nउदाहरण: 5 KM"
-                            }
-                        })
+                        buttons = [
 
-                    # SELLER FLOW
-
-                    else:
-
-                        session["step"] = "shop_name"
-
-                        send_msg({
-                            "messaging_product": "whatsapp",
-                            "to": sender,
-                            "type": "text",
-                            "text": {
-                                "body":
-                                "कृपया दुकान का नाम दर्ज करें"
-                            }
-                        })
-
-            # -----------------------------------
-            # CUSTOMER DISTANCE
-            # -----------------------------------
-
-            elif "text" in msg and \
-            user_sessions.get(sender, {}).get("step") == "distance":
-
-                user_sessions[sender]["distance"] = msg["text"]["body"]
-
-                user_sessions[sender]["step"] = "location"
-
-                send_msg({
-                    "messaging_product": "whatsapp",
-                    "to": sender,
-                    "type": "text",
-                    "text": {
-                        "body":
-                        "कृपया अपनी लोकेशन Share करें"
-                    }
-                })
-
-            # -----------------------------------
-            # SELLER SHOP NAME
-            # -----------------------------------
-
-            elif "text" in msg and \
-            user_sessions.get(sender, {}).get("step") == "shop_name":
-
-                user_sessions[sender]["shop_name"] = msg["text"]["body"]
-
-                user_sessions[sender]["step"] = "category"
-
-                rows = []
-
-                for key, val in categories.items():
-
-                    rows.append({
-                        "id": key,
-                        "title": val["title"]
-                    })
-
-                send_msg({
-                    "messaging_product": "whatsapp",
-                    "to": sender,
-                    "type": "interactive",
-                    "interactive": {
-                        "type": "list",
-                        "header": {
-                            "type": "text",
-                            "text": "श्रेणियाँ"
-                        },
-                        "body": {
-                            "text": "कृपया श्रेणी चुनें"
-                        },
-                        "action": {
-                            "button": "श्रेणी चुनें",
-                            "sections": [
-                                {
-                                    "title": "Near Me Marketplace",
-                                    "rows": rows
+                            {
+                                "type": "reply",
+                                "reply": {
+                                    "id": "1_km",
+                                    "title": "1 KM"
                                 }
-                            ]
-                        }
-                    }
-                })
+                            },
 
-            # -----------------------------------
+                            {
+                                "type": "reply",
+                                "reply": {
+                                    "id": "5_km",
+                                    "title": "5 KM"
+                                }
+                            },
+
+                            {
+                                "type": "reply",
+                                "reply": {
+                                    "id": "10_km",
+                                    "title": "10 KM"
+                                }
+                            }
+                        ]
+
+                        send_buttons(
+
+                            sender,
+
+                            "📍 कृपया दूरी चुनें:",
+
+                            buttons
+                        )
+
+                        return "OK", 200
+
+                    # =====================================================
+                    # DISTANCE SELECT
+                    # =====================================================
+
+                    elif session.get("step") == "distance":
+
+                        session["distance"] = button_id
+
+                        session["step"] = "location"
+
+                        send_text(
+
+                            sender,
+
+                            "📍 अब WhatsApp से अपनी लोकेशन Share करें"
+                        )
+
+                        return "OK", 200
+
+                    # =====================================================
+                    # SUBCATEGORY SELECT
+                    # =====================================================
+
+                    elif session.get("step") == "subcategory":
+
+                        session["subcategory"] = button_id
+
+                        session["step"] = "confirm"
+
+                        buttons = [
+
+                            {
+                                "type": "reply",
+                                "reply": {
+                                    "id": "submit",
+                                    "title": "Submit"
+                                }
+                            },
+
+                            {
+                                "type": "reply",
+                                "reply": {
+                                    "id": "restart",
+                                    "title": "Restart"
+                                }
+                            }
+                        ]
+
+                        send_buttons(
+
+                            sender,
+
+                            "✅ जानकारी पूरी हो गई।\n\n"
+                            "Submit करने के लिए नीचे क्लिक करें।",
+
+                            buttons
+                        )
+
+                        return "OK", 200
+
+                    # =====================================================
+                    # FINAL SUBMIT
+                    # =====================================================
+
+                    elif session.get("step") == "confirm":
+
+                        if button_id == "submit":
+
+                            print("FINAL USER DATA =")
+                            print(session)
+
+                            send_text(
+
+                                sender,
+
+                                "🎉 धन्यवाद!\n\n"
+                                "आपकी जानकारी सफलतापूर्वक दर्ज कर ली गई है।\n\n"
+                                "हमारी टीम जल्द ही आपसे संपर्क करेगी।"
+                            )
+
+                            del user_sessions[sender]
+
+                        else:
+
+                            del user_sessions[sender]
+
+                            send_text(
+                                sender,
+                                "♻️ Restart हो गया।\n\nHi भेजें।"
+                            )
+
+                        return "OK", 200
+
+                # =====================================================
+                # LIST REPLY
+                # =====================================================
+
+                elif interactive["type"] == "list_reply":
+
+                    row_id = interactive["list_reply"]["id"]
+
+                    session = user_sessions.get(sender, {})
+
+                    # =====================================================
+                    # CATEGORY SELECT
+                    # =====================================================
+
+                    if session.get("step") == "category":
+
+                        session["category"] = row_id
+
+                        session["step"] = "subcategory"
+
+                        subcategories = categories[row_id]["subs"]
+
+                        buttons = []
+
+                        for sub in subcategories:
+
+                            buttons.append({
+
+                                "type": "reply",
+
+                                "reply": {
+                                    "id": sub,
+                                    "title": sub[:20]
+                                }
+                            })
+
+                        send_buttons(
+
+                            sender,
+
+                            "🛠 उप-श्रेणी चुनें:",
+
+                            buttons[:3]
+                        )
+
+                        return "OK", 200
+
+            # =====================================================
             # LOCATION RECEIVED
-            # -----------------------------------
+            # =====================================================
 
-            elif "location" in msg and \
-            user_sessions.get(sender, {}).get("step") == "location":
-
-                user_sessions[sender]["location"] = msg["location"]
-
-                user_sessions[sender]["step"] = "category"
-
-                rows = []
-
-                for key, val in categories.items():
-
-                    rows.append({
-                        "id": key,
-                        "title": val["title"]
-                    })
-
-                send_msg({
-                    "messaging_product": "whatsapp",
-                    "to": sender,
-                    "type": "interactive",
-                    "interactive": {
-                        "type": "list",
-                        "header": {
-                            "type": "text",
-                            "text": "श्रेणियाँ"
-                        },
-                        "body": {
-                            "text": "कृपया श्रेणी चुनें"
-                        },
-                        "action": {
-                            "button": "श्रेणी चुनें",
-                            "sections": [
-                                {
-                                    "title": "Near Me Marketplace",
-                                    "rows": rows
-                                }
-                            ]
-                        }
-                    }
-                })
-
-            # -----------------------------------
-            # CATEGORY SELECT
-            # -----------------------------------
-
-            elif "interactive" in msg and \
-            "list_reply" in msg["interactive"]:
-
-                selected = msg["interactive"]["list_reply"]["id"]
+            if "location" in msg:
 
                 session = user_sessions.get(sender, {})
 
-                # CATEGORY
+                if session.get("step") == "location":
 
-                if session.get("step") == "category":
+                    session["location"] = msg["location"]
 
-                    session["category"] = selected
+                    session["step"] = "category"
 
-                    session["step"] = "subcategory"
+                    rows = []
 
-                    buttons = []
+                    for key, val in categories.items():
 
-                    for sub in categories[selected]["subs"]:
+                        rows.append({
 
-                        buttons.append({
-                            "type": "reply",
-                            "reply": {
-                                "id": sub,
-                                "title": sub[:20]
-                            }
+                            "id": key,
+
+                            "title": val["title"],
+
+                            "description": "Click to select"
                         })
 
-                    send_msg({
-                        "messaging_product": "whatsapp",
-                        "to": sender,
-                        "type": "interactive",
-                        "interactive": {
-                            "type": "button",
-                            "body": {
-                                "text":
-                                "उप-श्रेणी चुनें"
-                            },
-                            "action": {
-                                "buttons": buttons[:3]
-                            }
-                        }
-                    })
+                    send_list(
 
-            # -----------------------------------
-            # SUBCATEGORY SELECT
-            # -----------------------------------
+                        sender,
 
-            elif "interactive" in msg and \
-            "button_reply" in msg["interactive"] and \
-            user_sessions.get(sender, {}).get("step") == "subcategory":
+                        "📂 कृपया श्रेणी चुनें:",
 
-                sub = msg["interactive"]["button_reply"]["id"]
+                        rows
+                    )
 
-                user_sessions[sender]["subcategory"] = sub
-
-                user_sessions[sender]["step"] = "other"
-
-                send_msg({
-                    "messaging_product": "whatsapp",
-                    "to": sender,
-                    "type": "text",
-                    "text": {
-                        "body":
-                        "यदि अन्य जानकारी देना चाहते हैं तो लिखें"
-                    }
-                })
-
-            # -----------------------------------
-            # OTHER INFO
-            # -----------------------------------
-
-            elif "text" in msg and \
-            user_sessions.get(sender, {}).get("step") == "other":
-
-                user_sessions[sender]["other"] = msg["text"]["body"]
-
-                user_sessions[sender]["step"] = "whatsapp"
-
-                send_msg({
-                    "messaging_product": "whatsapp",
-                    "to": sender,
-                    "type": "text",
-                    "text": {
-                        "body":
-                        "कृपया अपना WhatsApp नंबर दर्ज करें"
-                    }
-                })
-
-            # -----------------------------------
-            # FINAL SUBMIT
-            # -----------------------------------
-
-            elif "text" in msg and \
-            user_sessions.get(sender, {}).get("step") == "whatsapp":
-
-                user_sessions[sender]["whatsapp"] = msg["text"]["body"]
-
-                print("USER DATA =", user_sessions[sender])
-
-                send_msg({
-                    "messaging_product": "whatsapp",
-                    "to": sender,
-                    "type": "text",
-                    "text": {
-                        "body":
-                        "धन्यवाद 🙏\n\nआपकी जानकारी सफलतापूर्वक दर्ज कर ली गई है।\n\nहमारी टीम जल्द ही आपसे संपर्क करेगी।"
-                    }
-                })
-
-                del user_sessions[sender]
+                    return "OK", 200
 
     except Exception as e:
 
@@ -436,12 +522,25 @@ def webhook():
 
     return "OK", 200
 
-# -----------------------------------
+# =====================================================
+# HOME
+# =====================================================
+
+@app.route("/")
+
+def home():
+
+    return "Near Me Marketplace Bot Running"
+
+# =====================================================
 # RUN SERVER
-# -----------------------------------
+# =====================================================
 
 if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 8080))
 
-    app.run(host="0.0.0.0", port=port)
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
