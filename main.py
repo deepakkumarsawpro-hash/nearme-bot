@@ -613,20 +613,48 @@ def webhook():
                     "📍 अब दुकान की लोकेशन Share करें"
                 )
 
-            # REQUIREMENT
+            # REQUIREMENT TEXT
 
-            elif session["step"] == "requirement":
+elif session["step"] == "requirement":
 
-                session["requirement"] = text
+    session["requirement_text"] = text
 
-                session["step"] = "whatsapp"
+    session["step"] = "whatsapp"
 
-                send_text(
+    send_text(
 
-                    sender,
+        sender,
 
-                    "📱 अपना WhatsApp नंबर लिखें"
-                )
+        "📱 अब अपना WhatsApp नंबर लिखें"
+    )
+
+# =================================================
+# IMAGE MESSAGE
+# =================================================
+
+elif "image" in msg:
+
+    if session["step"] == "requirement":
+
+        session["requirement_image"] = \
+        msg["image"]["id"]
+
+        # IMAGE CAPTION
+
+        if "caption" in msg["image"]:
+
+            session["requirement_caption"] = \
+            msg["image"]["caption"]
+
+        session["step"] = "whatsapp"
+
+        send_text(
+
+            sender,
+
+            "🖼 आपकी फोटो / requirement प्राप्त हो गई।\n\n"
+            "📱 अब अपना WhatsApp नंबर लिखें"
+        )
 
             # WHATSAPP
 
