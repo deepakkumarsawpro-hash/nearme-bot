@@ -1,7 +1,3 @@
-# =========================================
-# COMPLETE NEAR ME MARKETPLACE BOT
-# =========================================
-
 import os
 import requests
 from flask import Flask, request
