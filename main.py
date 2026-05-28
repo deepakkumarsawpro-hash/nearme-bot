@@ -48,7 +48,6 @@ def get_categories():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        # Table nahi hai to banao aur default data daalo
         cur.execute("""
             CREATE TABLE IF NOT EXISTS categories (
                 id SERIAL PRIMARY KEY,
@@ -59,7 +58,6 @@ def get_categories():
         """)
         cur.execute("SELECT COUNT(*) FROM categories")
         if cur.fetchone()[0] == 0:
-            # Pehli baar default categories daal do
             default_cats = {
                 "construction": {"title": "Construction", "subs": {"Mason": "नींव, ईंट जुड़ाई, प्लास्टर, टाइल्स", "Architect": "नक्शा, इंटीरियर डिजाइन, 3D व्यू", "Plumber": "पाइप लीकेज, मोटर, टैप फिटिंग", "Electrician": "वायरिंग, शॉर्ट-सर्किट, इनवर्टर, बोर्ड रिपेयर", "Carpenter": "दरवाजा, खिड़की, बेड/अलमारी फर्नीचर", "Paint & Hardware": "वॉल पुट्टी, पेंटिंग, हार्डवेयर सामान"}},
                 "automotive": {"title": "Automotive", "subs": {"Mechanic": "इंजन रिपेयर, सर्विसिंग, ब्रेक, क्लच", "Denting/Painting": "डेंट हटाना, पेंटिंग, पॉलिशिंग", "Spare Parts": "ओरिजिनल पार्ट्स, लुब्रिकेंट्स", "Washing": "फोम वॉश, इंटरनल क्लीनिंग, वैक्सिंग", "Batteries": "बैटरी बदलना, चार्जिंग"}},
@@ -119,7 +117,7 @@ def send_category_list(to):
     send({"messaging_product": "whatsapp", "to": to, "type": "interactive", "interactive": {"type": "list", "header": {"type": "text", "text": "Near Me Marketplace"}, "body": {"text": "📂 कृपया Category चुनें"}, "action": {"button": "Open Categories", "sections": [{"title": "Categories", "rows": rows}]}}})
 
 # =====================================================
-# AUTO MATCHING FUNCTION - LIMIT 10 SELLERS
+# AUTO MATCHING - LIMIT 10 SELLERS
 # =====================================================
 def find_and_notify_sellers(customer_data, customer_lead_id):
     try:
@@ -155,7 +153,7 @@ def find_and_notify_sellers(customer_data, customer_lead_id):
                 matched_sellers.append({"phone": seller_phone, "data": seller_data, "distance": distance})
 
         matched_sellers.sort(key=lambda x: x["distance"])
-        matched_sellers = matched_sellers[:10] # LIMIT 10 SELLERS
+        matched_sellers = matched_sellers[:10]
 
         for seller in matched_sellers:
             seller_phone_formatted = format_phone(seller["phone"])
@@ -178,7 +176,7 @@ def find_and_notify_sellers(customer_data, customer_lead_id):
         return 0
 
 # =====================================================
-# ADMIN DASHBOARD - CATEGORY ADD/DELETE
+# ADMIN DASHBOARD
 # =====================================================
 @app.route("/admin")
 def admin():
@@ -193,22 +191,19 @@ def admin():
         conn.close()
 
         html_template = """
-        <!DOCTYPE html>
-        <html>
-        <head><title>Admin Panel</title>
+        <!DOCTYPE html><html><head><title>Admin Panel</title>
         <style>
             body { font-family: Arial; margin: 20px; background: #f5f5f5; }
             h1, h2 { color: #333; }
             table { width: 100%; border-collapse: collapse; background: white; margin-bottom: 30px; }
             th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
             th { background: #4CAF50; color: white; }
-           .badge { padding: 4px 8px; border-radius: 4px; color: white; font-size: 12px; }
-           .customer { background: #2196F3; }
-           .seller { background: #FF9800; }
-           .form-box { background: white; padding: 20px; margin-bottom: 20px; }
+          .badge { padding: 4px 8px; border-radius: 4px; color: white; font-size: 12px; }
+          .customer { background: #2196F3; }
+          .seller { background: #FF9800; }
+          .form-box { background: white; padding: 20px; margin-bottom: 20px; }
             input, textarea { width: 100%; padding: 8px; margin: 5px 0; }
-        </style></head>
-        <body>
+        </style></head><body>
             <h1>📊 Admin Panel</h1>
             <div class="form-box">
                 <h2>➕ Add New Category</h2>
@@ -293,7 +288,7 @@ def verify():
     return "Verification failed", 403
 
 # =====================================================
-# MAIN WEBHOOK
+# MAIN WEBHOOK - REDIS SESSION WALA
 # =====================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -339,8 +334,7 @@ def webhook():
                     conn.close()
                     if result:
                         customer_phone, customer_data = result
-                        seller_data = json.loads(session_data) if session_data else {}
-                        seller_shop = seller_data.get("shop_name", "Ek Seller")
+                        seller_shop = session.get("shop_name", "Ek Seller")
                         send_text(format_phone(customer_phone), f"🎉 Good News!\n\n*{seller_shop}* aapki requirement me interested hai.\n\nSeller aapse jaldi contact karega: +{sender}")
                         send_text(sender, "✅ Done! Customer ko aapka contact bhej diya gaya hai. Jaldi call karke deal close karein.")
                     return "OK", 200
