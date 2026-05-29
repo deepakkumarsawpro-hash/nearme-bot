@@ -1,442 +1,197 @@
-import os
-import requests
-from flask import Flask, request, render_template_string
-import psycopg
-import redis
-import json
-import math
-from datetime import datetime
+const express = require('express');
+const axios = require('axios');
+const fs = require('fs');
+const app = express();
+app.use(express.json());
 
-app = Flask(__name__)
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
-# =====================================================
-# DATABASE + REDIS CONNECTION
-# =====================================================
-def get_db_connection():
-    conn = psycopg.connect(os.getenv('DATABASE_URL'))
-    return conn
+const DB_FILE = 'users.json';
+if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, '{}');
 
-def get_redis():
-    return redis.from_url(os.getenv('REDIS_URL'))
+// Category Data
+const CATEGORIES = {
+  customer: [
+    { id: "grocery", title: "Kirana/Grocery" },
+    { id: "medical", title: "Medical/Pharmacy" },
+    { id: "electronics", title: "Electronics" },
+    { id: "clothes", title: "Kapde/Fashion" }
+  ],
+  provider: [
+    { id: "electrician", title: "Electrician" },
+    { id: "plumber", title: "Plumber" },
+    { id: "carpenter", title: "Carpenter" },
+    { id: "ac_repair", title: "AC Repair" }
+  ]
+};
 
-# =====================================================
-# HELPER: FORMAT PHONE NUMBER - AUTO 91
-# =====================================================
-def format_phone(phone):
-    phone = str(phone).replace(" ", "").replace("+", "").replace("-", "")
-    if len(phone) == 10 and phone.isdigit():
-        return "91" + phone
-    if len(phone) == 12 and phone.startswith("91"):
-        return phone
-    return phone
+function getUser(number) {
+  const db = JSON.parse(fs.readFileSync(DB_FILE));
+  return db[number] || { step: 1, role: null, data: {} };
+}
 
-# =====================================================
-# HELPER: CALCULATE DISTANCE
-# =====================================================
-def haversine_distance(lat1, lon1, lat2, lon2):
-    R = 6371
-    dLat = math.radians(lat2 - lat1)
-    dLon = math.radians(lon2 - lon1)
-    a = math.sin(dLat/2) * math.sin(dLat/2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon/2) * math.sin(dLon/2)
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
+function saveUser(number, data) {
+  const db = JSON.parse(fs.readFileSync(DB_FILE));
+  db[number] = {...getUser(number),...data, updated: new Date().toISOString() };
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
 
-# =====================================================
-# HELPER: LOAD CATEGORIES FROM DB - ADMIN PANEL WALA
-# =====================================================
-def get_categories():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS categories (
-                id SERIAL PRIMARY KEY,
-                key VARCHAR(50) UNIQUE,
-                title VARCHAR(100),
-                subs JSONB
-            )
-        """)
-        cur.execute("SELECT COUNT(*) FROM categories")
-        if cur.fetchone()[0] == 0:
-            default_cats = {
-                "construction": {"title": "Construction", "subs": {"Mason": "नींव, ईंट जुड़ाई, प्लास्टर, टाइल्स", "Architect": "नक्शा, इंटीरियर डिजाइन, 3D व्यू", "Plumber": "पाइप लीकेज, मोटर, टैप फिटिंग", "Electrician": "वायरिंग, शॉर्ट-सर्किट, इनवर्टर, बोर्ड रिपेयर", "Carpenter": "दरवाजा, खिड़की, बेड/अलमारी फर्नीचर", "Paint & Hardware": "वॉल पुट्टी, पेंटिंग, हार्डवेयर सामान"}},
-                "automotive": {"title": "Automotive", "subs": {"Mechanic": "इंजन रिपेयर, सर्विसिंग, ब्रेक, क्लच", "Denting/Painting": "डेंट हटाना, पेंटिंग, पॉलिशिंग", "Spare Parts": "ओरिजिनल पार्ट्स, लुब्रिकेंट्स", "Washing": "फोम वॉश, इंटरनल क्लीनिंग, वैक्सिंग", "Batteries": "बैटरी बदलना, चार्जिंग"}},
-                "food": {"title": "Food", "subs": {"Restaurants": "वेज, नॉन-वेज, थाली, पार्सल", "Tiffin": "मंथली मेस, होम मेड खाना", "Fast Food": "पिज्जा, बर्गर, मोमोज, चाउमीन", "Sweets/Bakery": "केक, मिठाई", "Catering": "शादी/पार्टी ऑर्डर", "Grocery": "दैनिक राशन सामग्री"}},
-                "retail": {"title": "Retail", "subs": {"Clothing": "मेंस, वुमेंस, किड्स वियर", "Electronics": "टीवी, फ्रिज, वाशिंग मशीन", "Pharmacy": "दवाइयां, स्वास्थ्य सप्लीमेंट", "Footwear": "जूते, चप्पल", "Stationery": "कॉपी, किताब, ऑफिस सामान", "Mobile/Laptop": "स्क्रीन रिपेयर, बैटरी, चार्जर"}},
-                "healthcare": {"title": "Healthcare", "subs": {"Doctor": "जनरल फिजिशियन, स्पेशलिस्ट", "Clinic": "क्लिनिक सेवाएं", "Diagnostic Lab": "ब्लड टेस्ट, एक्स-रे", "Medical Store": "दवाइयां", "Physiotherapy": "फिजियोथेरेपी सेवाएं", "Ambulance": "24/7 इमरजेंसी"}},
-                "personal": {"title": "Personal Services", "subs": {"Salon": "हेयर कट, फेशियल", "Laundry": "ड्राई क्लीनिंग, प्रेस", "Tailoring": "सिलाई सेवाएं", "Cleaning": "सोफा/कारपेट क्लीनिंग", "Pest Control": "दीमक, कॉकरोच", "Courier": "डिलीवरी सेवाएं"}},
-                "agriculture": {"title": "Agriculture", "subs": {"Seeds/Fertilizer": "बीज, खाद, कीटनाशक", "Farm Equipment": "थ्रेशर, कल्टीवेटर", "Tractor Service": "इंजन, टायर रिपेयर", "Irrigation": "पंप सेट, पाइप", "Veterinary": "पशु चिकित्सा"}}
-            }
-            for key, value in default_cats.items():
-                cur.execute("INSERT INTO categories (key, title, subs) VALUES (%s, %s, %s)", (key, value["title"], json.dumps(value["subs"])))
-            conn.commit()
+// Button bhejne ka function
+async function sendButtons(to, bodyText, buttons) {
+  await axios.post(`https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`, {
+    messaging_product: 'whatsapp',
+    to: to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: bodyText },
+      action: { buttons: buttons }
+    }
+  }, { headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` } });
+}
 
-        cur.execute("SELECT key, title, subs FROM categories ORDER BY id")
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
+// List bhejne ka function 
+async function sendList(to, bodyText, buttonText, sections) {
+  await axios.post(`https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`, {
+    messaging_product: 'whatsapp',
+    to: to,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      body: { text: bodyText },
+      action: { button: buttonText, sections: sections }
+    }
+  }, { headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` } });
+}
 
-        categories = {}
-        for key, title, subs in rows:
-            categories[key] = {"title": title, "subs": subs}
-        return categories
-    except Exception as e:
-        print(f"Category Load Error: {e}")
-        return {}
+async function sendText(to, text) {
+  await axios.post(`https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`, {
+    messaging_product: 'whatsapp',
+    to: to,
+    text: { body: text }
+  }, { headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` } });
+}
 
-# =====================================================
-# WHATSAPP CONFIG
-# =====================================================
-PHONE_ID = "1060745180462931"
-TOKEN = "EAAMEDcGznz0BRsu61oQ6fDQDSLZC5fSSFHZCc0T563L09RZC6bZC2pPp0IuSRb5MWVSKHhfnbqaWVfcvZA8VqXfY4vm2SmZBBhuU7PpUHbZCCJRTpugaLqdPcbs4moBPtpqxtaOmYtOZCZBPdd1TYIeNLLczx9svvHOazqCy5ah3UHCiGrC169ZBNlk61JOsWO1XVtsgZDZD"
-VERIFY_TOKEN = "my_secret_token_123"
+app.get('/webhook', (req, res) => {
+  if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
+    res.send(req.query['hub.challenge']);
+  } else {
+    res.sendStatus(403);
+  }
+});
 
-# =====================================================
-# SEND FUNCTION
-# =====================================================
-def send(payload):
-    url = f"https://graph.facebook.com/v21.0/{PHONE_ID}/messages"
-    headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
-    try:
-        requests.post(url, json=payload, headers=headers)
-    except Exception as e:
-        print(f"Send Error: {e}")
+app.post('/webhook', async (req, res) => {
+  const entry = req.body.entry?.[0]?.changes?.[0]?.value;
+  const msg = entry?.messages?.[0];
 
-def send_text(to, text):
-    send({"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": text}})
+  if (msg) {
+    const from = msg.from;
+    const user = getUser(from);
+    
+    // Button/List reply handle karna
+    let msg_body = '';
+    if (msg.type === 'text') msg_body = msg.text.body;
+    if (msg.type === 'interactive') {
+      if (msg.interactive.type === 'button_reply') msg_body = msg.interactive.button_reply.id;
+      if (msg.interactive.type === 'list_reply') msg_body = msg.interactive.list_reply.id;
+    }
+    
+    console.log('Step:', user.step, 'Msg:', msg_body);
 
-def send_image(to, image_id, caption):
-    send({"messaging_product": "whatsapp", "to": to, "type": "image", "image": {"id": image_id, "caption": caption}})
+    // STEP 1: WELCOME - Koi bhi message pe
+    if (user.step === 1) {
+      saveUser(from, { step: 2 });
+      await sendButtons(from, 
+        `Welcome to NearMe 🙏\n\nAap kaun hai?`,
+        [
+          { type: 'reply', reply: { id: 'role_customer', title: '👤 Customer' } },
+          { type: 'reply', reply: { id: 'role_provider', title: '🏪 Provider' } }
+        ]
+      );
+    
+    // STEP 2: ROLE BRANCHING
+    } else if (user.step === 2) {
+      if (msg_body === 'role_customer') {
+        saveUser(from, { step: 3, role: 'customer' });
+        await sendText(from, `Kitne KM ke andar dukaan chahiye?\n\nJaise: 2km, 5km ya 10km likho`);
+      
+      } else if (msg_body === 'role_provider') {
+        saveUser(from, { step: 3, role: 'provider' });
+        await sendText(from, `Apni Shop/Business ka naam kya hai?\n\nType karke bhejo`);
+      }
+    
+    // STEP 3: LOCATION
+    } else if (user.step === 3) {
+      if (user.role === 'customer') {
+        saveUser(from, { step: 4, data: { distance: msg_body } });
+        await sendText(from, `📍 Apna Current Location bhejo\n\n📎 icon → Location → "Send current location" dabao`);
+      
+      } else if (user.role === 'provider') {
+        saveUser(from, { step: 4, data: { shop_name: msg_body } });
+        await sendText(from, `📍 Shop ka Location bhejo\n\n📎 icon → Location bhejo ya Google Maps link paste karo`);
+      }
+    
+    // STEP 4: CATEGORY - List format
+    } else if (user.step === 4 && msg.type === 'location') {
+      saveUser(from, { 
+        step: 5, 
+        data: {...user.data, lat: msg.location.latitude, lng: msg.location.longitude }
+      });
+      
+      const cats = user.role === 'customer'? CATEGORIES.customer : CATEGORIES.provider;
+      await sendList(from,
+        `Category choose karo:`,
+        `Categories`,
+        [{ title: 'Available Options', rows: cats }]
+      );
+    
+    // STEP 5: SUB-CATEGORY 
+    } else if (user.step === 5) {
+      saveUser(from, { step: 6, data: {...user.data, category: msg_body } });
+      await sendButtons(from,
+        `Sub-Category select karo ya 'Other' dabao:`,
+        [
+          { type: 'reply', reply: { id: 'sub_1', title: 'Option 1' } },
+          { type: 'reply', reply: { id: 'sub_2', title: 'Option 2' } },
+          { type: 'reply', reply: { id: 'sub_other', title: 'Other' } }
+        ]
+      );
+    
+    // STEP 6: DATA CAPTURE - Other Info
+    } else if (user.step === 6) {
+      saveUser(from, { step: 7, data: {...user.data, sub_category: msg_body } });
+      await sendText(from, `Koi extra details? \n\nJaise: Timing, Special offer, etc\n\nNahi hai to 'Skip' likho`);
+    
+    // STEP 7: WHATSAPP NUMBER
+    } else if (user.step === 7) {
+      saveUser(from, { step: 8, data: {...user.data, other_info: msg_body } });
+      await sendText(from, `Contact WhatsApp Number bhejo\n\n10 digit number only: 8292716185`);
+    
+    // STEP 8: CONFIRMATION + RESTART
+    } else if (user.step === 8) {
+      saveUser(from, { step: 9, data: {...user.data, contact: msg_body } });
+      await sendButtons(from,
+        `✅ Success! Data save ho gaya\n\nRole: ${user.role}\nCategory: ${user.data.category}\n\nDobara shuru karna hai?`,
+        [{ type: 'reply', reply: { id: 'restart', title: '🔄 Restart' } }]
+      );
+    
+    // RESTART
+    } else if (msg_body === 'restart') {
+      saveUser(from, { step: 1, role: null, data: {} });
+      await sendButtons(from, 
+        `Welcome to NearMe 🙏\n\nAap kaun hai?`,
+        [
+          { type: 'reply', reply: { id: 'role_customer', title: '👤 Customer' } },
+          { type: 'reply', reply: { id: 'role_provider', title: '🏪 Provider' } }
+        ]
+      );
+    }
+  }
+  
+  res.sendStatus(200);
+});
 
-def send_buttons(to, text, buttons):
-    send({"messaging_product": "whatsapp", "to": to, "type": "interactive", "interactive": {"type": "button", "body": {"text": text}, "action": {"buttons": buttons}}})
-
-def send_category_list(to):
-    categories = get_categories()
-    rows = [{"id": key, "title": value["title"]} for key, value in categories.items()]
-    send({"messaging_product": "whatsapp", "to": to, "type": "interactive", "interactive": {"type": "list", "header": {"type": "text", "text": "Near Me Marketplace"}, "body": {"text": "📂 कृपया Category चुनें"}, "action": {"button": "Open Categories", "sections": [{"title": "Categories", "rows": rows}]}}})
-
-# =====================================================
-# AUTO MATCHING - LIMIT 10 SELLERS
-# =====================================================
-def find_and_notify_sellers(customer_data, customer_lead_id):
-    try:
-        categories = get_categories()
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        cust_lat = customer_data["location"]["latitude"]
-        cust_lon = customer_data["location"]["longitude"]
-        cust_category = customer_data["category"]
-        cust_subcategory = customer_data["subcategory"]
-        max_distance = int(customer_data["distance"].split()[0])
-        req_text = customer_data.get("requirement_text") or customer_data.get("requirement_caption", "No text")
-        cust_phone = customer_data.get("whatsapp", "Not provided")
-        req_image_id = customer_data.get("requirement_image")
-
-        cur.execute("""
-            SELECT phone, data FROM leads
-            WHERE data->>'role' = 'seller'
-            AND data->>'category' = %s
-            AND data->>'subcategory' = %s
-        """, (cust_category, cust_subcategory))
-
-        sellers = cur.fetchall()
-        matched_sellers = []
-
-        for seller_phone, seller_data_json in sellers:
-            seller_data = seller_data_json
-            seller_lat = seller_data["location"]["latitude"]
-            seller_lon = seller_data["location"]["longitude"]
-            distance = haversine_distance(cust_lat, cust_lon, seller_lat, seller_lon)
-            if distance <= max_distance:
-                matched_sellers.append({"phone": seller_phone, "data": seller_data, "distance": distance})
-
-        matched_sellers.sort(key=lambda x: x["distance"])
-        matched_sellers = matched_sellers[:10]
-
-        for seller in matched_sellers:
-            seller_phone_formatted = format_phone(seller["phone"])
-            shop_name = seller["data"].get("shop_name", "Seller")
-            distance = seller["distance"]
-            msg = f"🔔 *New Customer Lead* 🔔\n\n👤 *Customer*: +{cust_phone}\n📍 *Distance*: {distance:.1f} KM away\n🏪 *Shop*: {shop_name}\n📂 *Category*: {categories[cust_category]['title']} > {cust_subcategory}\n📝 *Requirement*: {req_text}\n\n*Lead ID*: {customer_lead_id}"
-            buttons = [{"type": "reply", "reply": {"id": f"interested_{customer_lead_id}", "title": "✅ Interested"}}]
-
-            if req_image_id:
-                send_image(seller_phone_formatted, req_image_id, msg)
-                send_buttons(seller_phone_formatted, "Kya aap is customer se connect karna chahte hain?", buttons)
-            else:
-                send_buttons(seller_phone_formatted, msg, buttons)
-
-        cur.close()
-        conn.close()
-        return len(matched_sellers)
-    except Exception as e:
-        print(f"Matching Error: {e}")
-        return 0
-
-# =====================================================
-# ADMIN DASHBOARD
-# =====================================================
-@app.route("/admin")
-def admin():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT id, phone, data, created_at FROM leads ORDER BY created_at DESC LIMIT 100")
-        leads = cur.fetchall()
-        cur.execute("SELECT key, title, subs FROM categories ORDER BY id")
-        cats = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        html_template = """
-        <!DOCTYPE html><html><head><title>Admin Panel</title>
-        <style>
-            body { font-family: Arial; margin: 20px; background: #f5f5f5; }
-            h1, h2 { color: #333; }
-            table { width: 100%; border-collapse: collapse; background: white; margin-bottom: 30px; }
-            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-            th { background: #4CAF50; color: white; }
-          .badge { padding: 4px 8px; border-radius: 4px; color: white; font-size: 12px; }
-          .customer { background: #2196F3; }
-          .seller { background: #FF9800; }
-          .form-box { background: white; padding: 20px; margin-bottom: 20px; }
-            input, textarea { width: 100%; padding: 8px; margin: 5px 0; }
-        </style></head><body>
-            <h1>📊 Admin Panel</h1>
-            <div class="form-box">
-                <h2>➕ Add New Category</h2>
-                <form action="/add-category" method="POST">
-                    <input name="key" placeholder="category_key e.g. education" required>
-                    <input name="title" placeholder="Category Title e.g. Education" required>
-                    <textarea name="subs" placeholder='Subcategories JSON: {"Teacher":"Math, Science", "Coaching":"IIT, NEET"}' rows="4" required></textarea>
-                    <button type="submit">Add Category</button>
-                </form>
-            </div>
-            <h2>📂 Current Categories</h2>
-            <table><tr><th>Key</th><th>Title</th><th>Subcategories</th><th>Action</th></tr>
-            {% for cat in cats %}
-            <tr><td>{{ cat[0] }}</td><td>{{ cat[1] }}</td><td>{{ cat[2] }}</td><td><a href="/delete-category/{{ cat[0] }}" onclick="return confirm('Delete?')">Delete</a></td></tr>
-            {% endfor %}
-            </table>
-            <h2>📋 Recent Leads</h2>
-            <table><tr><th>ID</th><th>Role</th><th>Phone</th><th>Category</th><th>Date</th></tr>
-            {% for lead in leads %}
-            <tr><td>{{ lead[0] }}</td><td><span class="badge {{ lead[2]['role'] }}">{{ lead[2]['role'].title() }}</span></td><td>+{{ lead[1] }}</td><td>{{ lead[2].get('category', '-') }} > {{ lead[2].get('subcategory', '-') }}</td><td>{{ lead[3].strftime('%d-%m-%Y %H:%M') }}</td></tr>
-            {% endfor %}
-            </table>
-        </body></html>
-        """
-        return render_template_string(html_template, leads=leads, cats=cats)
-    except Exception as e:
-        return f"Error: {e}"
-
-@app.route("/add-category", methods=["POST"])
-def add_category():
-    try:
-        key = request.form["key"]
-        title = request.form["title"]
-        subs = request.form["subs"]
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO categories (key, title, subs) VALUES (%s, %s, %s)", (key, title, subs))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return "Category Added! <a href='/admin'>Go Back</a>"
-    except Exception as e:
-        return f"Error: {e}"
-
-@app.route("/delete-category/<key>")
-def delete_category(key):
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM categories WHERE key = %s", (key,))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return "Category Deleted! <a href='/admin'>Go Back</a>"
-    except Exception as e:
-        return f"Error: {e}"
-
-@app.route("/db-check")
-def db_check():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute('SELECT 1;')
-        cur.close()
-        conn.close()
-        r = get_redis()
-        r.ping()
-        return "Database + Redis Connected ✅"
-    except Exception as e:
-        return f"Connection Failed ❌ {e}"
-
-# =====================================================
-# WEBHOOK VERIFY
-# =====================================================
-@app.route("/webhook", methods=["GET"])
-def verify():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return challenge, 200
-    return "Verification failed", 403
-
-# =====================================================
-# MAIN WEBHOOK - REDIS SESSION WALA
-# =====================================================
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    try:
-        data = request.get_json()
-        if "entry" not in data:
-            return "OK", 200
-
-        msg = data["entry"][0]["changes"][0]["value"].get("messages", [{}])[0]
-        sender = msg.get("from")
-        if not sender:
-            return "OK", 200
-
-        r = get_redis()
-        session_data = r.get(f"session:{sender}")
-
-        if not session_data:
-            session = {"step": "role"}
-            r.set(f"session:{sender}", json.dumps(session))
-            buttons = [{"type": "reply", "reply": {"id": "customer", "title": "Customer"}}, {"type": "reply", "reply": {"id": "seller", "title": "Seller"}}]
-            send_buttons(sender, "🙏 Welcome to Near Me Marketplace\n\nकृपया अपना रोल चुनें:", buttons)
-            return "OK", 200
-
-        session = json.loads(session_data)
-
-        if "text" in msg and session["step"] == "role":
-            buttons = [{"type": "reply", "reply": {"id": "customer", "title": "Customer"}}, {"type": "reply", "reply": {"id": "seller", "title": "Seller"}}]
-            send_buttons(sender, "🙏 Welcome to Near Me Marketplace\n\nकृपया अपना रोल चुनें:", buttons)
-            return "OK", 200
-
-        if "interactive" in msg:
-            interactive = msg["interactive"]
-            if interactive["type"] == "button_reply":
-                button_id = interactive["button_reply"]["id"]
-
-                if button_id.startswith("interested_"):
-                    lead_id = button_id.split("_")[1]
-                    conn = get_db_connection()
-                    cur = conn.cursor()
-                    cur.execute("SELECT phone, data FROM leads WHERE id = %s", (lead_id,))
-                    result = cur.fetchone()
-                    cur.close()
-                    conn.close()
-                    if result:
-                        customer_phone, customer_data = result
-                        seller_shop = session.get("shop_name", "Ek Seller")
-                        send_text(format_phone(customer_phone), f"🎉 Good News!\n\n*{seller_shop}* aapki requirement me interested hai.\n\nSeller aapse jaldi contact karega: +{sender}")
-                        send_text(sender, "✅ Done! Customer ko aapka contact bhej diya gaya hai. Jaldi call karke deal close karein.")
-                    return "OK", 200
-
-                if session["step"] == "role":
-                    session["role"] = button_id
-                    if button_id == "customer":
-                        session["step"] = "distance"
-                        buttons = [{"type": "reply", "reply": {"id": "1 KM", "title": "1 KM"}}, {"type": "reply", "reply": {"id": "5 KM", "title": "5 KM"}}, {"type": "reply", "reply": {"id": "10 KM", "title": "10 KM"}}]
-                        send_buttons(sender, "📍 कितनी दूरी में सेवा चाहिए?", buttons)
-                    else:
-                        session["step"] = "shop_name"
-                        send_text(sender, "🏪 अपनी दुकान / सेवा का नाम लिखें")
-                elif session["step"] == "distance":
-                    session["distance"] = button_id
-                    session["step"] = "location"
-                    send_text(sender, "📍 अब अपनी लोकेशन Share करें")
-                elif session["step"] == "subcategory":
-                    session["subcategory"] = button_id
-                    session["step"] = "requirement"
-                    send_text(sender, "📝 अपनी पूरी जरूरत / requirement लिखें\n\nया संबंधित फोटो भेजें।\n\n✅ Text लिख सकते हैं\n✅ Photo भेज सकते हैं\n✅ Photo + Text दोनों भेज सकते हैं")
-
-            elif interactive["type"] == "list_reply":
-                row_id = interactive["list_reply"]["id"]
-                if session["step"] == "category":
-                    session["category"] = row_id
-                    session["step"] = "subcategory"
-                    buttons = []
-                    categories = get_categories()
-                    subs = categories[row_id]["subs"]
-                    for sub, keyword in subs.items():
-                        buttons.append({"type": "reply", "reply": {"id": sub, "title": sub[:20]}})
-                    send_buttons(sender, "🛠 Sub Category चुनें", buttons[:3])
-
-        elif "location" in msg:
-            if session["step"] == "location":
-                session["location"] = msg["location"]
-                session["step"] = "category"
-                send_category_list(sender)
-            elif session["step"] == "seller_location":
-                session["location"] = msg["location"]
-                session["step"] = "category"
-                send_category_list(sender)
-
-        elif "text" in msg:
-            text = msg["text"]["body"]
-            if session["step"] == "shop_name":
-                session["shop_name"] = text
-                session["step"] = "seller_location"
-                send_text(sender, "📍 अब दुकान की लोकेशन Share करें")
-            elif session["step"] == "requirement":
-                session["requirement_text"] = text
-                session["step"] = "whatsapp"
-                send_text(sender, "📱 अब अपना WhatsApp नंबर लिखें")
-            elif session["step"] == "whatsapp":
-                session["whatsapp"] = format_phone(text)
-                print("FINAL USER DATA =", session)
-                try:
-                    conn = get_db_connection()
-                    cur = conn.cursor()
-                    cur.execute("CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, phone VARCHAR(20), data JSONB, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
-                    cur.execute("INSERT INTO leads (phone, data) VALUES (%s, %s) RETURNING id", (sender, json.dumps(session)))
-                    lead_id = cur.fetchone()[0]
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-
-                    if session["role"] == "customer":
-                        matched = find_and_notify_sellers(session, lead_id)
-                        send_text(sender, f"✅ धन्यवाद 🙏\n\nआपकी जानकारी सफलतापूर्वक दर्ज हो गई है।\n\n📢 {matched} नजदीकी दुकानदारों को आपकी requirement भेज दी गई है।\n\n*Lead ID: {lead_id}*\n\nJab koi seller interested hoga to aapko turant notification milega.")
-                    else:
-                        send_text(sender, "✅ धन्यवाद 🙏\n\nआपकी दुकान सफलतापूर्वक रजिस्टर हो गई है।\n\nAb aapke area ke Customer ki requirement seedhe aapke WhatsApp par aayegi 'Interested' button ke saath.")
-                except Exception as db_error:
-                    print(f"DB Save Error: {db_error}")
-                    send_text(sender, "⚠️ कुछ Error आ गया। कृपया फिर से try करें।")
-                r.delete(f"session:{sender}")
-                return "OK", 200
-
-        elif "image" in msg:
-            if session["step"] == "requirement":
-                session["requirement_image"] = msg["image"]["id"]
-                if "caption" in msg["image"]:
-                    session["requirement_caption"] = msg["image"]["caption"]
-                session["step"] = "whatsapp"
-                send_text(sender, "🖼 आपकी फोटो / requirement प्राप्त हो गई।\n\n📱 अब अपना WhatsApp नंबर लिखें")
-
-        r.set(f"session:{sender}", json.dumps(session))
-        return "OK", 200
-    except Exception as e:
-        print("ERROR =", e)
-        return "OK", 200
-
-# =====================================================
-# HOME
-# =====================================================
-@app.route("/")
-def home():
-    return "Near Me Marketplace Bot Running ✅"
-
-# =====================================================
-# RUN
-# =====================================================
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`NearMe Bot Running`));
